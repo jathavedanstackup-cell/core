@@ -1,0 +1,25 @@
+# Local development database for C.O.R.E.
+#
+# Port 5433 deliberately: 5432 is often already taken by another project's
+# Postgres, and colliding with it would be a bad first experience.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: core-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: core
+      POSTGRES_USER: core
+      POSTGRES_PASSWORD: core_local_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - core_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U core -d core"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  core_postgres_data:
