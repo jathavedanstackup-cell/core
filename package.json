@@ -1,0 +1,23 @@
+{
+  "name": "core-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "C.O.R.E. — Continuity, Operations, Risk & Execution. Organizational resilience and decision support.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
