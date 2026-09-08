@@ -84,6 +84,39 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await registerContext(app);
 
+  /*
+   * Authentication runs before input validation, everywhere under /api/v1.
+   *
+   * Handlers parse their parameters with Zod and only then call requireOrg, so
+   * an anonymous caller sending a malformed id got a 400 describing the
+   * validation failure instead of a 401. That is feedback about a protected
+   * endpoint given to someone with no credentials, and it made the API answer
+   * inconsistently — 401 for a well-formed id, 400 for a malformed one.
+   *
+   * This gate closes that: no session, no answer, whatever the payload looks
+   * like. The /api/v1/auth routes are exempt because signing in is how a
+   * session is obtained in the first place; each of those handles its own
+   * authorization.
+   */
+  app.addHook('preHandler', async (request, reply) => {
+    const path = request.url.split('?')[0] ?? '';
+    if (!path.startsWith('/api/v1/')) return;
+    if (path.startsWith('/api/v1/auth/')) return;
+    if (request.auth !== null) return;
+
+    // Only guard routes that actually exist. Fastify runs preHandler hooks for
+    // the not-found handler too, and answering 401 for a route that is not
+    // there would be a lie — it implies signing in would produce something.
+    // The source is public anyway, so the route map is not a secret worth
+    // keeping.
+    if (request.routeOptions.url === undefined) return;
+
+    void reply.status(401).send({
+      error: { code: 'unauthorized', message: 'You need to sign in to do that.' },
+      requestId: request.id,
+    });
+  });
+
   // Error handling is installed BEFORE the routes. Awaiting `register`
   // loads each plugin immediately, and a child context copies whatever
   // error handler the parent has at the moment it is created -- so

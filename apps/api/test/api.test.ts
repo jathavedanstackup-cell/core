@@ -678,3 +678,69 @@ describe('serving the web app', () => {
     }
   });
 });
+
+describe('authentication runs before input validation', () => {
+  /**
+   * Found on the live deployment: a protected route given a malformed id
+   * answered 400 with validation detail instead of 401, because handlers parse
+   * parameters before calling requireOrg. An anonymous caller should learn
+   * nothing about a protected endpoint, and the API should not answer
+   * differently depending on whether their guess was well-formed.
+   */
+  const protectedRoutes = [
+    '/api/v1/organizations',
+    '/api/v1/reports/not-a-uuid/catalogue',
+    '/api/v1/reports/00000000-0000-0000-0000-000000000000/catalogue',
+    '/api/v1/model/not-a-uuid/entities',
+    '/api/v1/exercises/not-a-uuid',
+    '/api/v1/actions/not-a-uuid',
+    '/api/v1/improvements/not-a-uuid',
+    '/api/v1/audit/not-a-uuid',
+    '/api/v1/not-a-uuid/assessment',
+  ];
+
+  for (const url of protectedRoutes) {
+    it(`answers 401, not a validation error, for ${url}`, async () => {
+      const response = await app.inject({ method: 'GET', url });
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('unauthorized');
+    });
+  }
+
+  it('gives the same answer whether or not the id is well-formed', async () => {
+    const malformed = await app.inject({
+      method: 'GET',
+      url: '/api/v1/model/not-a-uuid/entities',
+    });
+    const wellFormed = await app.inject({
+      method: 'GET',
+      url: '/api/v1/model/00000000-0000-0000-0000-000000000000/entities',
+    });
+    expect(malformed.statusCode).toBe(wellFormed.statusCode);
+    expect(malformed.json().error.code).toBe(wellFormed.json().error.code);
+  });
+
+  it('still lets the sign-in routes through unauthenticated', async () => {
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: 'nobody@core.test', password: 'a-long-enough-password' },
+    });
+    // 401 because the credentials are wrong, not because the gate blocked it.
+    expect(login.json().error.code).toBe('unauthorized');
+
+    const me = await app.inject({ method: 'GET', url: '/api/v1/auth/me' });
+    expect(me.statusCode).toBe(401);
+  });
+
+  it('lets an authenticated member through as before', async () => {
+    const actor = await makeUser('ADMIN');
+    const org = await makeOrg(actor);
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/${org.id}/assessment`,
+      headers: { cookie: actor.cookie },
+    });
+    expect(response.statusCode).toBe(200);
+  });
+});
