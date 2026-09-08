@@ -63,6 +63,34 @@ either `RENDER_EXTERNAL_URL` or `APP_URL` is present, rather than guessing.
 **If you put a custom domain in front**, set `APP_URL` to it. Otherwise the
 service will keep using the `onrender.com` hostname for sign-in redirects.
 
+## Free tier — what it costs
+
+`render.yaml` pins both the web service and the database to Render's **free**
+plan, so the Blueprint should not ask for payment. Three things follow from
+that, and it is better to know them now than in a month:
+
+| | |
+| --- | --- |
+| **Sleeping** | The service sleeps after ~15 minutes with no traffic. The next request wakes it and takes about 50 seconds. Everything after that is normal. |
+| **Database expiry** | Render **deletes a free PostgreSQL database after 30 days.** This is the one that bites. Move to a paid database before then, or export your work first. |
+| **Memory** | 512 MB, which is comfortable for this service. |
+
+To get your data out before an expiry, use the Reports page or the CLI:
+
+```bash
+core report <org> risk --format pdf --out risk.pdf
+core assess <org> --json > assessment.json
+```
+
+To upgrade, change `plan: free` to `plan: starter` on the web service and to a
+paid plan on the database in `render.yaml`, commit, and Render redeploys.
+
+**If Render still shows a paid plan**, it is reading an older commit — check
+that the Blueprint is pointed at `main` and that the latest commit is the one
+you expect.
+
+---
+
 ## 4. Verify
 
 ```bash

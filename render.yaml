@@ -1,13 +1,28 @@
 # Render blueprint for C.O.R.E.
 #
-# One web service (API + built web app) and one managed PostgreSQL instance.
-# Import this from the Render dashboard: New → Blueprint → point at this repo.
+# One web service (API + built web app) and one managed PostgreSQL instance,
+# both on Render's free tier. Import from the dashboard: New → Blueprint.
+#
+# What the free tier actually costs, so none of it is a surprise later:
+#
+#   - The web service sleeps after about 15 minutes with no traffic. The next
+#     request wakes it and takes roughly 50 seconds; everything after that is
+#     normal speed. Migrations re-run on wake, which is a no-op once applied.
+#
+#   - The free database is DELETED by Render after 30 days. Move to a paid
+#     database before then or the data goes with it. `core report` from the
+#     CLI, or the Reports page, will get your work out as PDF/CSV/JSON.
+#
+#   - 512 MB of memory, which is comfortable for this service.
+#
+# To upgrade: change `plan: free` to `plan: starter` on the web service and to
+# a paid plan on the database, commit, and Render redeploys.
 services:
   - type: web
     name: core
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: starter
+    plan: free
     healthCheckPath: /readiness
     envVars:
       - key: NODE_ENV
@@ -42,5 +57,5 @@ services:
 
 databases:
   - name: core-db
-    plan: basic-256mb
+    plan: free
     postgresMajorVersion: "17"
