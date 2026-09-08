@@ -1,22 +1,8 @@
 # Render blueprint for C.O.R.E.
 #
 # One web service (API + built web app) and one managed PostgreSQL instance,
-# both on Render's free tier. Import from the dashboard: New → Blueprint.
-#
-# What the free tier actually costs, so none of it is a surprise later:
-#
-#   - The web service sleeps after about 15 minutes with no traffic. The next
-#     request wakes it and takes roughly 50 seconds; everything after that is
-#     normal speed. Migrations re-run on wake, which is a no-op once applied.
-#
-#   - The free database is DELETED by Render after 30 days. Move to a paid
-#     database before then or the data goes with it. `core report` from the
-#     CLI, or the Reports page, will get your work out as PDF/CSV/JSON.
-#
-#   - 512 MB of memory, which is comfortable for this service.
-#
-# To upgrade: change `plan: free` to `plan: starter` on the web service and to
-# a paid plan on the database, commit, and Render redeploys.
+# both on Render's free tier.
+
 services:
   - type: web
     name: core
@@ -24,34 +10,46 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /readiness
+
     envVars:
       - key: NODE_ENV
         value: production
+
       - key: PORT
         value: 4000
-      # Render injects the connection string from the database below.
+
+      # Render injects the internal PostgreSQL connection string.
       - key: DATABASE_URL
         fromDatabase:
           name: core-db
           property: connectionString
-      # Generated once by Render and kept stable, so sessions survive deploys.
+
+      # Render's PostgreSQL certificate is self-signed.
+      # CORE's production DB client otherwise rejects it.
+      - key: DATABASE_SSL_INSECURE_SKIP_VERIFY
+        value: "true"
+
+      # Generated once by Render and kept stable across deploys.
       - key: SESSION_SECRET
         generateValue: true
-      # APP_URL is deliberately absent: Render injects RENDER_EXTERNAL_URL,
-      # which the service uses instead. That value comes from the platform and
-      # cannot be influenced by a caller, unlike the Host header. Set APP_URL
-      # only for a custom domain the platform variable does not reflect.
-      # Optional. Without SMTP_URL, verification codes go to the service log
-      # and no email is sent.
+
+      # Render automatically provides RENDER_EXTERNAL_URL.
+      # APP_URL is therefore intentionally not required.
+      #
+      # Optional SMTP configuration.
       - key: SMTP_URL
         sync: false
+
       - key: MAIL_FROM
         value: C.O.R.E. <no-reply@core.local>
-      # Optional Google sign-in. The button stays hidden while these are unset.
+
+      # Optional Google sign-in.
       - key: GOOGLE_CLIENT_ID
         sync: false
+
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+
       - key: DEMO_MODE_ENABLED
         value: "true"
 
