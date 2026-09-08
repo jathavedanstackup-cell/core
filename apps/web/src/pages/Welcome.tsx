@@ -321,10 +321,30 @@ export function WelcomePage(): ReactNode {
                   dashboard, find this service&rsquo;s logs, and look for the block marked{' '}
                   <code>EMAIL NOT SENT</code>. The code is inside it, and expires in 15 minutes.
                 </p>
-                <p style={{ marginTop: 'var(--s-2)' }}>
-                  To receive real email instead, set <code>SMTP_URL</code> in the service
-                  environment and redeploy.
-                </p>
+                <details style={{ marginTop: 'var(--s-3)' }}>
+                  <summary style={{ cursor: 'pointer' }}>
+                    Send real email instead &mdash; free, about four minutes
+                  </summary>
+                  <p style={{ marginTop: 'var(--s-2)' }}>
+                    Any SMTP provider works. With Gmail: switch on 2-step verification, generate a
+                    16-character App Password at{' '}
+                    <code>myaccount.google.com/apppasswords</code> (a normal account password is
+                    refused), then set these in the service environment:
+                  </p>
+                  <pre className="env-block">
+                    {[
+                      'SMTP_HOST = smtp.gmail.com',
+                      'SMTP_PORT = 465',
+                      'SMTP_USER = you@gmail.com',
+                      'SMTP_PASS = the 16-character App Password',
+                      'MAIL_FROM = C.O.R.E. <you@gmail.com>',
+                    ].join('\n')}
+                  </pre>
+                  <p style={{ marginTop: 'var(--s-2)' }}>
+                    The credentials are checked when the service starts, so the log says whether
+                    they were accepted rather than leaving you to find out at the next signup.
+                  </p>
+                </details>
               </div>
             ) : (
               <p className="muted">

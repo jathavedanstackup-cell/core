@@ -612,3 +612,19 @@ table.data tr:last-child td {
 .plain-input:focus-visible {
   border-color: var(--accent);
 }
+
+/* Environment settings shown in the sign-up help. Monospaced and scrollable so
+   a long value never widens the card on a phone. */
+.env-block {
+  margin-top: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper-sunken);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  overflow-x: auto;
+  white-space: pre;
+}
