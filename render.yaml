@@ -36,12 +36,39 @@ services:
       # Render automatically provides RENDER_EXTERNAL_URL.
       # APP_URL is therefore intentionally not required.
       #
-      # Optional SMTP configuration.
+      # Email. Leave every one of these blank and verification codes are
+      # written to this service's log instead of being sent — the app says so
+      # on screen, so nobody is left waiting for a message that is not coming.
+      #
+      # For Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=465,
+      # SMTP_USER=<your address>, SMTP_PASS=<16-character App Password>.
+      # A normal account password will not work; Gmail requires an App
+      # Password, which requires 2-step verification to be switched on.
+      #
+      # The credentials are checked at startup, so a wrong password shows up in
+      # the log immediately rather than at somebody's first signup.
+      - key: SMTP_HOST
+        sync: false
+
+      - key: SMTP_PORT
+        value: "465"
+
+      - key: SMTP_USER
+        sync: false
+
+      - key: SMTP_PASS
+        sync: false
+
+      # Alternative to the four settings above, if you already have a full
+      # connection string. Takes precedence when set.
       - key: SMTP_URL
         sync: false
 
+      # Gmail ignores a From address that is not the authenticated account and
+      # rewrites it to your own, so set this to your Gmail address to keep the
+      # header honest, e.g. "C.O.R.E. <you@gmail.com>".
       - key: MAIL_FROM
-        value: C.O.R.E. <no-reply@core.local>
+        sync: false
 
       # Optional Google sign-in.
       - key: GOOGLE_CLIENT_ID

@@ -71,8 +71,24 @@ const schema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
 
-  /** SMTP connection string. Without it, verification codes go to the log. */
+  /**
+   * SMTP as a single connection string, e.g.
+   * `smtps://user%40example.com:password@smtp.example.com:465`.
+   *
+   * Fine when you already have one. The discrete settings below exist because
+   * hand-assembling this string is where people lose twenty minutes: the
+   * username is itself an email address, and passwords contain characters that
+   * mean something inside a URL.
+   */
   SMTP_URL: z.string().optional(),
+
+  /** Discrete SMTP settings. Used when SMTP_URL is not set. */
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().max(65_535).default(465),
+  SMTP_USER: z.string().optional(),
+  /** Paste the provider's password or app password exactly as given. */
+  SMTP_PASS: z.string().optional(),
+
   MAIL_FROM: z.string().default('C.O.R.E. <no-reply@core.local>'),
 
   /** Allows anyone signed in to create the labelled demo organization. */
@@ -133,7 +149,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     typeof value.GOOGLE_CLIENT_SECRET === 'string' &&
     value.GOOGLE_CLIENT_SECRET.length > 0;
 
-  const realEmailEnabled = typeof value.SMTP_URL === 'string' && value.SMTP_URL.length > 0;
+  // Either a full connection string, or host + user + password. Anything less
+  // is treated as absent, so a half-filled configuration degrades to writing
+  // codes to the log rather than failing every signup.
+  const hasSmtpUrl = typeof value.SMTP_URL === 'string' && value.SMTP_URL.length > 0;
+  const hasSmtpParts =
+    typeof value.SMTP_HOST === 'string' &&
+    value.SMTP_HOST.length > 0 &&
+    typeof value.SMTP_USER === 'string' &&
+    value.SMTP_USER.length > 0 &&
+    typeof value.SMTP_PASS === 'string' &&
+    value.SMTP_PASS.length > 0;
+  const realEmailEnabled = hasSmtpUrl || hasSmtpParts;
 
   cached = Object.freeze({
     ...value,

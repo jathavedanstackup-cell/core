@@ -10,6 +10,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { closeDb } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
+import { verifyEmailTransport } from './lib/email.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -49,6 +50,24 @@ async function main(): Promise<void> {
     },
     'C.O.R.E. API ready',
   );
+
+  // Check the mail credentials now rather than at the first signup, where a
+  // wrong password looks like a broken product. Deliberately after listen():
+  // mail being misconfigured must not stop the service serving.
+  if (config.realEmailEnabled) {
+    const result = await verifyEmailTransport();
+    if (result.ok) {
+      app.log.info('email: SMTP credentials accepted, verification codes will be sent');
+    } else {
+      app.log.error(
+        `email: SMTP is configured but the server rejected it, so verification codes will NOT be delivered. ${result.reason}`,
+      );
+    }
+  } else {
+    app.log.warn(
+      'email: no SMTP configured, so verification codes are written to this log instead of being sent',
+    );
+  }
 }
 
 main().catch((error: unknown) => {
