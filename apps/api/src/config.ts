@@ -46,13 +46,18 @@ const schema = z.object({
   /**
    * Public origin of the deployment, e.g. https://core.example.com.
    *
-   * Optional. Production serves the web app and the API from one origin, so
-   * this is only needed to override what the request itself reports — behind a
-   * proxy that rewrites the host, or when the browser reaches the service on a
-   * different name than the proxy passes through. Leaving it unset makes a
-   * deployment work with no configuration at all.
+   * Used to build OAuth redirect URIs and redirect targets, so it must come
+   * from configuration rather than from a request header — see lib/origin.ts.
+   * Required in production unless RENDER_EXTERNAL_URL supplies it.
    */
   APP_URL: z.string().url().optional(),
+
+  /**
+   * Injected by Render for a web service, and not influenced by any caller.
+   * Present only so a Render deployment needs no configuration of its own
+   * address; APP_URL takes precedence anywhere else.
+   */
+  RENDER_EXTERNAL_URL: z.string().url().optional(),
 
   /**
    * Secret used to derive the session cookie signature. Must be set explicitly
@@ -100,6 +105,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   const value = parsed.data;
   const isProduction = value.NODE_ENV === 'production';
+
+  if (
+    isProduction &&
+    value.APP_URL === undefined &&
+    value.RENDER_EXTERNAL_URL === undefined
+  ) {
+    // Refuse to start rather than fall back to the Host header: that header is
+    // caller-controlled behind a proxy, and it feeds OAuth redirect URIs.
+    throw new Error(
+      'APP_URL must be set in production, e.g. APP_URL=https://core.example.com. ' +
+        'It is the address browsers reach this service on, and it cannot safely be ' +
+        'guessed from a request header. On Render it is supplied automatically as ' +
+        'RENDER_EXTERNAL_URL, so no setting is needed there.',
+    );
+  }
 
   if (isProduction && value.SESSION_SECRET === undefined) {
     throw new Error(

@@ -161,6 +161,25 @@ endpoint says it is unconfigured.
 
 ---
 
+## The service's own address
+
+The public origin is used to build OAuth redirect URIs and two redirect
+targets, so it comes from configuration only: `APP_URL`, or the platform's
+`RENDER_EXTERNAL_URL`. In production the process refuses to start without one.
+
+An earlier version derived it from the request. With `trustProxy` enabled that
+resolves from `X-Forwarded-Host`, which a platform edge does not validate
+against the service's real hostname — making the sign-in redirects an open
+redirect and handing an attacker-chosen `redirect_uri` to the OAuth exchange.
+The Google exchange would likely have rejected an unregistered URI, but relying
+on the far side to catch it is not a control. Tests now assert that a spoofed
+forwarded host cannot influence the origin.
+
+Outside production the request is still used, because nothing sits in front of
+a development server.
+
+---
+
 ## Not done yet
 
 Stated plainly so nobody assumes otherwise:

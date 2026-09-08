@@ -50,9 +50,18 @@ and a generated `SESSION_SECRET` automatically.
 
 ## 3. There is no step three
 
-The service works out its own public address from the request, so nothing has
-to be configured after the first deploy. Render supplies the database URL and
-generates the session secret; everything else has a working default.
+Nothing has to be configured after the first deploy. Render supplies the
+database URL, generates the session secret, and injects `RENDER_EXTERNAL_URL`
+— which the service uses as its own public address.
+
+That variable comes from the platform, not from the request, and that
+distinction matters: the address is used to build OAuth redirect URIs and
+redirect targets, so deriving it from the `Host` header would let a caller
+choose where those point. In production the service refuses to start unless
+either `RENDER_EXTERNAL_URL` or `APP_URL` is present, rather than guessing.
+
+**If you put a custom domain in front**, set `APP_URL` to it. Otherwise the
+service will keep using the `onrender.com` hostname for sign-in redirects.
 
 ## 4. Verify
 

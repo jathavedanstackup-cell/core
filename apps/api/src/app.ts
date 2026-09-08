@@ -18,6 +18,7 @@ import { ZodError } from 'zod';
 
 import { loadConfig } from './config.js';
 import { AppError } from './lib/errors.js';
+import { configuredOrigin } from './lib/origin.js';
 import { registerContext } from './plugins/context.js';
 import { registerActionRoutes } from './routes/actions.js';
 import { registerAssessmentRoutes } from './routes/assessment.js';
@@ -56,10 +57,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   // Production serves the web app from this same origin, so cross-origin
-  // requests are not part of the design and are refused unless APP_URL names a
-  // separate front end. Development allows any origin for the Vite dev server.
+  // requests are not part of the design: only the service's own configured
+  // origin is allowed. Development allows any origin for the Vite dev server.
   await app.register(cors, {
-    origin: config.isProduction ? (config.APP_URL ?? false) : true,
+    origin: config.isProduction ? (configuredOrigin() ?? false) : true,
     credentials: true,
   });
 

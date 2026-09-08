@@ -42,9 +42,9 @@ services:
       # public internet; the service logs a warning either way.
       DATABASE_URL: postgresql://core:core_local_dev@postgres:5432/core?sslmode=disable
       SESSION_SECRET: local-development-secret-not-for-production-use-ever
-      # APP_URL is deliberately unset: the service derives its own origin from
-      # the request, and leaving it out here exercises the same path a real
-      # deployment takes.
+      # The address browsers reach this stack on. Set explicitly because the
+      # service refuses to guess it from a request header in production.
+      APP_URL: http://localhost:4000
       DEMO_MODE_ENABLED: "true"
       LOG_LEVEL: info
     ports:

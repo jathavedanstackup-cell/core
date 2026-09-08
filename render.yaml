@@ -22,9 +22,10 @@ services:
       # Generated once by Render and kept stable, so sessions survive deploys.
       - key: SESSION_SECRET
         generateValue: true
-      # APP_URL is deliberately absent. The service derives its own public
-      # origin from the request, so a deployment needs no manual configuration.
-      # Set it only if a proxy rewrites the host the browser actually used.
+      # APP_URL is deliberately absent: Render injects RENDER_EXTERNAL_URL,
+      # which the service uses instead. That value comes from the platform and
+      # cannot be influenced by a caller, unlike the Host header. Set APP_URL
+      # only for a custom domain the platform variable does not reflect.
       # Optional. Without SMTP_URL, verification codes go to the service log
       # and no email is sent.
       - key: SMTP_URL
