@@ -224,6 +224,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           message: 'Verify your email address to continue. We have sent you a new code.',
         },
         email: user.email,
+        // The client needs this to tell the user where the code actually went.
+        emailDeliveryConfigured: config.realEmailEnabled,
       };
     }
 

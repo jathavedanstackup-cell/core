@@ -644,3 +644,37 @@ describe('building an organization from nothing', () => {
     expect(JSON.stringify(report.json().document)).toContain('Sole Operator');
   });
 });
+
+describe('serving the web app', () => {
+  /**
+   * Found on the live deployment: HEAD / returned 404 while GET / returned the
+   * app. The single-page fallback matched on GET only, so uptime monitors and
+   * link checkers — which routinely use HEAD — would have reported the site
+   * down while it was serving perfectly.
+   *
+   * The assertion is that the two never disagree, which holds whether or not
+   * the web app happens to be bundled next to the API in this environment.
+   */
+  for (const path of ['/', '/welcome', '/o/some-org/model']) {
+    it(`answers HEAD ${path} the same way it answers GET`, async () => {
+      const get = await app.inject({ method: 'GET', url: path });
+      const head = await app.inject({ method: 'HEAD', url: path });
+      expect(head.statusCode).toBe(get.statusCode);
+    });
+  }
+
+  it('still refuses an unknown API route under either method', async () => {
+    const get = await app.inject({ method: 'GET', url: '/api/v1/nope' });
+    const head = await app.inject({ method: 'HEAD', url: '/api/v1/nope' });
+    expect(get.statusCode).toBe(404);
+    expect(head.statusCode).toBe(404);
+  });
+
+  it('keeps the health endpoints out of the client-route fallback', async () => {
+    // These must answer as themselves, never as the app shell.
+    for (const path of ['/health', '/readiness']) {
+      const response = await app.inject({ method: 'GET', url: path });
+      expect(response.headers['content-type']).toContain('application/json');
+    }
+  });
+});

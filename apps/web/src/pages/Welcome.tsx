@@ -35,6 +35,15 @@ export function WelcomePage(): ReactNode {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  /**
+   * Whether this deployment can actually send email.
+   *
+   * Deliberately separate from `note`: `go()` clears the note on every step
+   * change, which previously wiped the "no email provider configured" message
+   * the instant the user was moved to the verify step — so they were told to
+   * check an inbox that was never going to receive anything.
+   */
+  const [emailDelivers, setEmailDelivers] = useState<boolean | null>(null);
   const [capabilities, setCapabilities] = useState<MeResponse['capabilities'] | null>(null);
 
   // Already signed in and verified: there is nothing to do here.
@@ -130,12 +139,16 @@ export function WelcomePage(): ReactNode {
             className="auth-card card stack"
             onSubmit={(event) =>
               void submit(event, async () => {
-                const result = await api.post<{ status?: string; error?: { code: string } }>(
-                  '/api/v1/auth/login',
-                  { email, password },
-                );
+                const result = await api.post<{
+                  status?: string;
+                  error?: { code: string };
+                  emailDeliveryConfigured?: boolean;
+                }>('/api/v1/auth/login', { email, password });
                 if (result.error?.code === 'email_unverified') {
-                  setNote('We have sent you a new verification code.');
+                  // Deliberately not a `note`: go() clears those on every step
+                  // change, which is what previously threw away the "no email
+                  // configured" message the moment the user reached this step.
+                  setEmailDelivers(result.emailDeliveryConfigured ?? null);
                   go('verify');
                   return;
                 }
@@ -215,11 +228,7 @@ export function WelcomePage(): ReactNode {
                   message: string;
                   emailDeliveryConfigured: boolean;
                 }>('/api/v1/auth/register', { name, email, password });
-                setNote(
-                  result.emailDeliveryConfigured
-                    ? result.message
-                    : `${result.message} This deployment has no email provider configured, so the code was written to the server log.`,
-                );
+                setEmailDelivers(result.emailDeliveryConfigured);
                 go('verify');
               })
             }
@@ -297,10 +306,31 @@ export function WelcomePage(): ReactNode {
               })
             }
           >
-            <h1 style={{ fontSize: 'var(--step-2)' }}>Check your email</h1>
-            <p className="muted">
-              We sent a six-digit code to <strong>{email}</strong>. It expires in 15 minutes.
-            </p>
+            <h1 style={{ fontSize: 'var(--step-2)' }}>
+              {emailDelivers === false ? 'Your code is in the server log' : 'Check your email'}
+            </h1>
+
+            {emailDelivers === false ? (
+              <div className="notice notice-warn">
+                <p>
+                  <strong>No email provider is configured on this deployment</strong>, so nothing
+                  was sent to {email}. This is expected, not a fault.
+                </p>
+                <p style={{ marginTop: 'var(--s-2)' }}>
+                  Your six-digit code was written to the service log instead. Open your hosting
+                  dashboard, find this service&rsquo;s logs, and look for the block marked{' '}
+                  <code>EMAIL NOT SENT</code>. The code is inside it, and expires in 15 minutes.
+                </p>
+                <p style={{ marginTop: 'var(--s-2)' }}>
+                  To receive real email instead, set <code>SMTP_URL</code> in the service
+                  environment and redeploy.
+                </p>
+              </div>
+            ) : (
+              <p className="muted">
+                We sent a six-digit code to <strong>{email}</strong>. It expires in 15 minutes.
+              </p>
+            )}
 
             {note !== null && <p className="notice">{note}</p>}
 
@@ -334,9 +364,11 @@ export function WelcomePage(): ReactNode {
               disabled={busy}
               onClick={() =>
                 void submit(new Event('submit') as unknown as FormEvent, async () => {
-                  const result = await api.post<{ message: string }>('/api/v1/auth/resend', {
-                    email,
-                  });
+                  const result = await api.post<{
+                    message: string;
+                    emailDeliveryConfigured: boolean;
+                  }>('/api/v1/auth/resend', { email });
+                  setEmailDelivers(result.emailDeliveryConfigured);
                   setNote(result.message);
                 })
               }

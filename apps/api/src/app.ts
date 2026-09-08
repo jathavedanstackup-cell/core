@@ -100,9 +100,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.setNotFoundHandler((request, reply) => {
     // Anything that is not an API route and not a file is a client-side route,
     // so hand back the app shell and let the router resolve it.
+    //
+    // HEAD as well as GET: uptime monitors and link checkers routinely use HEAD,
+    // and answering 404 to those while GET returns the app would have the site
+    // reported as down while it was serving perfectly. Node omits the body on a
+    // HEAD response by itself, so the same handler is correct for both.
     if (
       servingWeb &&
-      request.method === 'GET' &&
+      (request.method === 'GET' || request.method === 'HEAD') &&
       !request.url.startsWith('/api/') &&
       request.url !== '/health' &&
       request.url !== '/readiness'
