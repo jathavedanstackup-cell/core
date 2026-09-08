@@ -14,7 +14,7 @@ import { loadConfig } from '../config.js';
 import { getDb } from '../db/client.js';
 import { memberships, organizations, users } from '../db/schema.js';
 import { recordAudit } from '../lib/audit.js';
-import { badRequest, forbidden, notFound } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { listMemberships, requireOrg, requireVerifiedUser } from '../plugins/context.js';
 import { DEMO_ORG_NAME, DEMO_ORG_REGION, demoDependencies, demoEntities } from '../services/demo.js';
 import { seedModel } from '../services/seed.js';
@@ -205,6 +205,103 @@ export async function registerOrganizationRoutes(app: FastifyInstance): Promise<
         joinedAt: row.membership.createdAt.toISOString(),
       })),
     };
+  });
+
+  // -------------------------------------------------------------------------
+  /**
+   * Add someone to the organization.
+   *
+   * They must already have a verified C.O.R.E. account. There is deliberately
+   * no email-invitation flow yet: issuing invitation tokens to addresses nobody
+   * has proven they control is a way to leak an organization's name and
+   * membership, and doing it properly needs more than this endpoint.
+   */
+  app.post('/:orgId/members', async (request, reply) => {
+    const { orgId } = z.object({ orgId: z.string().uuid() }).parse(request.params);
+    const body = z
+      .object({
+        email: z.string().trim().email().max(320).transform((value) => value.toLowerCase()),
+        role: z.enum(['ADMIN', 'LEADER', 'OPERATOR', 'VIEWER']).default('VIEWER'),
+      })
+      .parse(request.body);
+
+    const context = await requireOrg(request, orgId, 'ADMIN');
+
+    const found = await getDb().select().from(users).where(eq(users.email, body.email)).limit(1);
+    const invitee = found[0];
+    if (invitee === undefined) {
+      throw badRequest(
+        `Nobody with the address ${body.email} has a C.O.R.E. account yet. Ask them to create one, then add them.`,
+      );
+    }
+    if (invitee.emailVerifiedAt === null) {
+      throw badRequest(`${body.email} has not verified their email address yet.`);
+    }
+
+    const already = await getDb()
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(and(eq(memberships.orgId, orgId), eq(memberships.userId, invitee.id)))
+      .limit(1);
+    if (already.length > 0) {
+      throw conflict(`${body.email} is already a member of this organization.`);
+    }
+
+    await getDb().insert(memberships).values({ orgId, userId: invitee.id, role: body.role });
+
+    await recordAudit({
+      orgId,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      entityType: 'membership',
+      entityId: invitee.id,
+      action: 'add_member',
+      after: { email: invitee.email, role: body.role },
+      requestId: String(request.id),
+    });
+
+    void reply.status(201);
+    return {
+      member: { userId: invitee.id, name: invitee.name, email: invitee.email, role: body.role },
+    };
+  });
+
+  // -------------------------------------------------------------------------
+  app.delete('/:orgId/members/:userId', async (request) => {
+    const params = z
+      .object({ orgId: z.string().uuid(), userId: z.string().uuid() })
+      .parse(request.params);
+    const context = await requireOrg(request, params.orgId, 'ADMIN');
+
+    // Removing the last administrator would lock the organization out of its
+    // own administration, exactly as demoting them would.
+    const admins = await getDb()
+      .select({ userId: memberships.userId })
+      .from(memberships)
+      .where(and(eq(memberships.orgId, params.orgId), eq(memberships.role, 'ADMIN')));
+    if (admins.length === 1 && admins[0]?.userId === params.userId) {
+      throw badRequest('This is the only administrator. Promote someone else first.');
+    }
+
+    const removed = await getDb()
+      .delete(memberships)
+      .where(
+        and(eq(memberships.orgId, params.orgId), eq(memberships.userId, params.userId)),
+      )
+      .returning({ id: memberships.id });
+    if (removed.length === 0) throw notFound('That person is not a member of this organization.');
+
+    await recordAudit({
+      orgId: params.orgId,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      entityType: 'membership',
+      entityId: params.userId,
+      action: 'remove_member',
+      requestId: String(request.id),
+    });
+
+    return { status: 'removed' };
   });
 
   // -------------------------------------------------------------------------

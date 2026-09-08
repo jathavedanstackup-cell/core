@@ -80,6 +80,9 @@ export function WorkspacePage(): ReactNode {
           C.O.R.E. analyses what your organization has written down. Add the things you depend on —
           people, systems, suppliers, places — and how they connect, and the analysis follows.
         </p>
+        <Link className="btn btn-primary" to="model">
+          Build the model
+        </Link>
       </Empty>
     );
   }

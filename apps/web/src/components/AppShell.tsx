@@ -16,6 +16,7 @@ import './shell.css';
 // improve. Audit sits last because it is a record, not a place to work.
 const NAV = [
   { to: '', label: 'Workspace', end: true },
+  { to: 'model', label: 'Model' },
   { to: 'readiness', label: 'Readiness' },
   { to: 'scenarios', label: 'Scenarios' },
   { to: 'actions', label: 'Actions' },
@@ -23,6 +24,7 @@ const NAV = [
   { to: 'exercises', label: 'Exercises' },
   { to: 'improvements', label: 'Improvements' },
   { to: 'reports', label: 'Reports' },
+  { to: 'people', label: 'People' },
   { to: 'audit', label: 'Audit' },
 ];
 

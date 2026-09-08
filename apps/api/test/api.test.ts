@@ -455,3 +455,192 @@ describe('error handling', () => {
     expect(JSON.stringify(body)).not.toContain('at Object');
   });
 });
+
+describe('membership', () => {
+  it('adds someone who already has a verified account, and lets them in', async () => {
+    const owner = await makeUser('ADMIN');
+    const colleague = await makeUser('VIEWER');
+    const org = await makeOrg(owner);
+
+    // Before being added, the organization does not exist as far as they know.
+    const before = await app.inject({
+      method: 'GET',
+      url: `/api/v1/${org.id}/assessment`,
+      headers: { cookie: colleague.cookie },
+    });
+    expect(before.statusCode).toBe(404);
+
+    const added = await app.inject({
+      method: 'POST',
+      url: `/api/v1/organizations/${org.id}/members`,
+      headers: { cookie: owner.cookie },
+      payload: { email: colleague.user.email, role: 'OPERATOR' },
+    });
+    expect(added.statusCode).toBe(201);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: `/api/v1/${org.id}/assessment`,
+      headers: { cookie: colleague.cookie },
+    });
+    expect(after.statusCode).toBe(200);
+  });
+
+  it('refuses an address with no account rather than inventing one', async () => {
+    const owner = await makeUser('ADMIN');
+    const org = await makeOrg(owner);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/organizations/${org.id}/members`,
+      headers: { cookie: owner.cookie },
+      payload: { email: `ghost-${randomUUID()}@core.test`, role: 'VIEWER' },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.message).toContain('create one');
+  });
+
+  it('refuses a non-admin adding people', async () => {
+    const owner = await makeUser('ADMIN');
+    const operator = await makeUser('OPERATOR');
+    const org = await makeOrg(owner);
+    await getDb()
+      .insert(memberships)
+      .values({ orgId: org.id, userId: operator.user.id, role: 'OPERATOR' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/organizations/${org.id}/members`,
+      headers: { cookie: operator.cookie },
+      payload: { email: owner.user.email, role: 'VIEWER' },
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('will not let an organization lock itself out of its own administration', async () => {
+    const owner = await makeUser('ADMIN');
+    const org = await makeOrg(owner);
+
+    const demote = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/organizations/${org.id}/members/${owner.user.id}`,
+      headers: { cookie: owner.cookie },
+      payload: { role: 'VIEWER' },
+    });
+    expect(demote.statusCode).toBe(400);
+
+    const remove = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/organizations/${org.id}/members/${owner.user.id}`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(remove.statusCode).toBe(400);
+    expect(remove.json().error.message).toContain('only administrator');
+  });
+
+  it('removes a member, and they lose access immediately', async () => {
+    const owner = await makeUser('ADMIN');
+    const colleague = await makeUser('VIEWER');
+    const org = await makeOrg(owner);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/organizations/${org.id}/members`,
+      headers: { cookie: owner.cookie },
+      payload: { email: colleague.user.email, role: 'VIEWER' },
+    });
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/organizations/${org.id}/members/${colleague.user.id}`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(removed.statusCode).toBe(200);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: `/api/v1/${org.id}/assessment`,
+      headers: { cookie: colleague.cookie },
+    });
+    expect(after.statusCode).toBe(404);
+  });
+});
+
+describe('building an organization from nothing', () => {
+  it('supports the whole path a real user takes through the interface', async () => {
+    const actor = await makeUser('ADMIN');
+
+    // 1. Create the organization, naming a couple of important areas.
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/organizations',
+      headers: { cookie: actor.cookie },
+      payload: { name: `Scratch ${randomUUID().slice(0, 6)}`, importantAreas: ['Ship orders'] },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().organization.id as string;
+    createdOrgIds.push(id);
+
+    // 2. Add the things it depends on, one at a time.
+    for (const entity of [
+      { ref: 'p-sole', kind: 'person', name: 'Sole Operator' },
+      { ref: 'app-wms', kind: 'application', name: 'Warehouse system' },
+    ]) {
+      const added = await app.inject({
+        method: 'POST',
+        url: `/api/v1/model/${id}/entities`,
+        headers: { cookie: actor.cookie },
+        payload: entity,
+      });
+      expect(added.statusCode).toBe(201);
+    }
+
+    // 3. Say the function is critical and how long it can be down.
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/model/${id}/entities/bf-ship-orders`,
+      headers: { cookie: actor.cookie },
+      payload: { criticality: 'CRITICAL', mtdMinutes: 240, rtoMinutes: 120 },
+    });
+    expect(updated.statusCode).toBe(200);
+
+    // 4. Connect them.
+    for (const dependency of [
+      { ref: 'd-fn-app', dependentRef: 'bf-ship-orders', providerRef: 'app-wms', type: 'requires' },
+      { ref: 'd-app-person', dependentRef: 'app-wms', providerRef: 'p-sole', type: 'staffs' },
+    ]) {
+      const added = await app.inject({
+        method: 'POST',
+        url: `/api/v1/model/${id}/dependencies`,
+        headers: { cookie: actor.cookie },
+        payload: dependency,
+      });
+      expect(added.statusCode).toBe(201);
+    }
+
+    // 5. The analysis now has something to say, derived only from the above.
+    const assessment = await app.inject({
+      method: 'GET',
+      url: `/api/v1/${id}/assessment`,
+      headers: { cookie: actor.cookie },
+    });
+    expect(assessment.statusCode).toBe(200);
+    const body = assessment.json();
+    expect(body.model.entityCount).toBe(3);
+    expect(body.summary.total).toBeGreaterThan(0);
+
+    const ids = [...body.tiers.FIX_FIRST, ...body.tiers.FIX_NEXT, ...body.tiers.MONITOR].map(
+      (item: { id: string }) => item.id,
+    );
+    // One person staffs the only system the critical function needs.
+    expect(ids).toContain('single_person:p-sole');
+
+    // 6. And a report can be produced from it.
+    const report = await app.inject({
+      method: 'POST',
+      url: `/api/v1/reports/${id}/risk`,
+      headers: { cookie: actor.cookie },
+    });
+    expect(report.statusCode).toBe(201);
+    expect(JSON.stringify(report.json().document)).toContain('Sole Operator');
+  });
+});

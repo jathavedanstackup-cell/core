@@ -30,14 +30,15 @@ Deterministic, no I/O, 95 tests.
 
 ### The API — `apps/api`
 
-PostgreSQL, tenant isolation, 34 integration tests.
+PostgreSQL, tenant isolation, 40 integration tests.
 
 - Immutable plain-SQL migrations, applied at startup before the port binds
 - Email and password authentication with scrypt, mandatory verification, opaque
   server-side sessions, password reset, and responses that do not enumerate
   accounts
 - Roles (ADMIN / LEADER / OPERATOR / VIEWER) enforced server-side
-- Organizations, membership, and a labelled demo organization
+- Organizations, membership with add/remove/role change, and a labelled demo
+  organization
 - The model: entities, dependencies, transactional import, data-quality report
 - Assessment, readiness, solutions, scenarios with stored runs
 - Actions with a real state machine and a database-enforced completion time
@@ -56,6 +57,10 @@ PostgreSQL, tenant isolation, 34 integration tests.
 - Authentication: sign in, create account, verify, with the server's own wording
 - Organization setup and demo entry
 - Workspace leading with one sentence about what matters now
+- A model editor: add, edit and remove the things the organization depends on
+  and the dependencies between them, paste in a JSON import, and see data
+  quality problems as they arise
+- People and roles, with the last-administrator guard visible in the interface
 - Finding detail: risk reasons with confidence, options with trade-offs, the
   recommendation and why, the plan, and one click to create tracked actions
 - Scenario runner showing impact in waves
@@ -112,6 +117,10 @@ These are absent, not partial:
   professional controls. The spec allows this — it says natural language must not
   be the only way to operate the system — but the natural-language surface itself
   is not there.
+- **Email invitations.** An administrator adds a colleague by address, and that
+  colleague must already have a verified account. Issuing invitation tokens to
+  addresses nobody has proven they control would leak an organization's name and
+  membership, and doing it properly needs more than one endpoint.
 
 ---
 

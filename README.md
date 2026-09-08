@@ -112,7 +112,7 @@ what matters right now, and everything else is disclosed underneath it.
 ```bash
 npm test                                  # every workspace
 npm test --workspace @core/engine         # 95 unit tests, no database needed
-npm test --workspace @core/api            # 34 integration tests, needs Postgres
+npm test --workspace @core/api            # 40 integration tests, needs Postgres
 npm run typecheck                         # strict TypeScript across the repo
 npm run build                             # engine, then api, then web and cli
 npm run migrate --workspace @core/api     # apply pending migrations
@@ -148,11 +148,12 @@ npm run dev --workspace @core/cli -- validate Meridian
 ## Status
 
 Working end to end: accounts, email verification and Google sign-in;
-organizations and roles; the model and its import; assessment, solutions and
+organizations, people and roles; building the model by hand or by import; assessment, solutions and
 scenarios; actions; incidents with timelines; exercises with after-action
 review; the improvement register; reports exported as PDF, HTML, CSV and JSON;
 the audit trail; and the command line.
 
-Not built: point-in-time replay of a past organization state, and natural
-language querying. `docs/ROADMAP.md` is kept honest about this, and nothing in
+Not built: point-in-time replay of a past organization state, natural language
+querying, and email invitations (a colleague is added by address and must
+already have an account). `docs/ROADMAP.md` is kept honest about this, and nothing in
 the interface pretends otherwise.

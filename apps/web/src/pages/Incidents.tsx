@@ -221,6 +221,12 @@ export function IncidentsPage(): ReactNode {
                 </p>
 
                 <div className="row" style={{ marginTop: 'var(--s-3)' }}>
+                  <a
+                    className="btn btn-sm"
+                    href={`/api/v1/reports/${orgId}/preview/incident?format=pdf&subject=${incident.id}&download=true`}
+                  >
+                    Download review (PDF)
+                  </a>
                   {STATUSES.filter((status) => status !== incident.status).map((status) => (
                     <button
                       key={status}

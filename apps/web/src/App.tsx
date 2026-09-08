@@ -19,6 +19,8 @@ import { ExercisesPage } from './pages/Exercises';
 import { FindingPage } from './pages/Finding';
 import { ImprovementsPage } from './pages/Improvements';
 import { IncidentsPage } from './pages/Incidents';
+import { ModelPage } from './pages/Model';
+import { PeoplePage } from './pages/People';
 import { ReadinessPage } from './pages/Readiness';
 import { ReportsPage } from './pages/Reports';
 import { ScenariosPage } from './pages/Scenarios';
@@ -86,6 +88,7 @@ export function App(): ReactNode {
       >
         <Route index element={<WorkspacePage />} />
         <Route path="finding/:findingId" element={<FindingPage />} />
+        <Route path="model" element={<ModelPage />} />
         <Route path="scenarios" element={<ScenariosPage />} />
         <Route path="actions" element={<ActionsPage />} />
         <Route path="readiness" element={<ReadinessPage />} />
@@ -93,6 +96,7 @@ export function App(): ReactNode {
         <Route path="incidents" element={<IncidentsPage />} />
         <Route path="improvements" element={<ImprovementsPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="people" element={<PeoplePage />} />
         <Route path="audit" element={<AuditPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

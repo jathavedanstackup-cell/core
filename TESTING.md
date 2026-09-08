@@ -1,11 +1,11 @@
 # Testing
 
-129 tests. None of them exist to raise a number; each asserts a behaviour the
+135 tests. None of them exist to raise a number; each asserts a behaviour the
 product would be wrong without.
 
 ```bash
 npm test --workspace @core/engine   # 95 tests, ~3s, no database
-npm test --workspace @core/api      # 34 tests, ~11s, needs PostgreSQL
+npm test --workspace @core/api      # 40 tests, ~25s, needs PostgreSQL
 ```
 
 ---
@@ -35,7 +35,7 @@ Two tests exist purely to hold the product to its own claims:
 
 ---
 
-## API — 34 integration tests
+## API — 40 integration tests
 
 Real PostgreSQL, real Fastify via `inject`. Deliberately not mocked: tenant
 isolation, authorization and database constraints are exactly the things a mock
@@ -57,6 +57,8 @@ would wave through.
 | Exercises | The expectation is captured at start and not before; an exercise cannot start twice; events are refused unless it is running; the review compares expected against actual; recommendations reach the improvement register |
 | Improvements | Its own state machine, and a completion that always carries a time |
 | Reports | Every format produces a real file; the PDF really is a PDF (`%PDF-` header, `%%EOF` trailer); CSV escapes quotes and commas; a stored report is reopened as issued, not regenerated from newer data |
+| Membership | A colleague is invisible to an organization before being added and can see it immediately after; an address with no account is refused rather than invented; a non-admin cannot add anyone; the last administrator can be neither demoted nor removed; a removed member loses access at once |
+| Building from nothing | The whole path a real user takes — create an organization, add items one at a time, set criticality and recovery targets, connect them, and get an assessment and a report that name what was entered. Guards the case the demo organization cannot: that the product works for data somebody actually typed in. |
 
 One of these caught a real defect while being written. An exercise where nobody
 recorded a recovery time was falling back to the moment someone clicked
