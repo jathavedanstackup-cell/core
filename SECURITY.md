@@ -180,6 +180,34 @@ a development server.
 
 ---
 
+## Authentication precedes input validation
+
+Every route under `/api/v1` except the sign-in routes is gated before its
+handler runs. Previously handlers parsed their parameters with Zod first, so a
+protected endpoint answered 400 with validation detail for a malformed id and
+401 for a well-formed one — telling an anonymous caller something about a
+protected endpoint, and varying the answer by how good their guess was.
+
+The gate deliberately does not apply to routes that did not match: Fastify runs
+preHandler hooks for the not-found handler too, and answering 401 for a route
+that does not exist implies signing in would produce something. The source is
+public, so the route map is not worth that lie.
+
+---
+
+## Email delivery
+
+Credentials are verified at startup, not at the first signup, so a wrong
+password appears in the log immediately instead of looking like a broken
+product. A partial configuration — a host with no password, say — is treated as
+no configuration, so verification codes fall back to the log and the interface
+says so, rather than every signup failing at the send.
+
+Passwords are never logged: the logger redacts them and the email module never
+prints them.
+
+---
+
 ## Not done yet
 
 Stated plainly so nobody assumes otherwise:

@@ -1,11 +1,11 @@
 # Testing
 
-135 tests. None of them exist to raise a number; each asserts a behaviour the
+170 tests. None of them exist to raise a number; each asserts a behaviour the
 product would be wrong without.
 
 ```bash
 npm test --workspace @core/engine   # 95 tests, ~3s, no database
-npm test --workspace @core/api      # 40 tests, ~25s, needs PostgreSQL
+npm test --workspace @core/api      # 75 tests, ~30s, needs PostgreSQL
 ```
 
 ---
@@ -35,7 +35,7 @@ Two tests exist purely to hold the product to its own claims:
 
 ---
 
-## API — 40 integration tests
+## API — 75 integration tests
 
 Real PostgreSQL, real Fastify via `inject`. Deliberately not mocked: tenant
 isolation, authorization and database constraints are exactly the things a mock
@@ -59,6 +59,13 @@ would wave through.
 | Reports | Every format produces a real file; the PDF really is a PDF (`%PDF-` header, `%%EOF` trailer); CSV escapes quotes and commas; a stored report is reopened as issued, not regenerated from newer data |
 | Membership | A colleague is invisible to an organization before being added and can see it immediately after; an address with no account is refused rather than invented; a non-admin cannot add anyone; the last administrator can be neither demoted nor removed; a removed member loses access at once |
 | Building from nothing | The whole path a real user takes — create an organization, add items one at a time, set criticality and recovery targets, connect them, and get an assessment and a report that name what was entered. Guards the case the demo organization cannot: that the product works for data somebody actually typed in. |
+| Auth before validation | A protected route answers 401 whether the id is malformed or well-formed, so an anonymous caller learns nothing from the difference; unknown routes still answer an honest 404 |
+| Mail configuration | A half-filled SMTP config counts as none, so codes fall back to the log rather than every signup failing at the send |
+| HEAD/GET parity | The two methods never disagree on a client route |
+
+Three of these exist because the live deployment was audited after it shipped,
+and each records a defect that was actually there rather than one imagined in
+advance.
 
 One of these caught a real defect while being written. An exercise where nobody
 recorded a recovery time was falling back to the moment someone clicked

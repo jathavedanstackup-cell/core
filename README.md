@@ -112,7 +112,7 @@ what matters right now, and everything else is disclosed underneath it.
 ```bash
 npm test                                  # every workspace
 npm test --workspace @core/engine         # 95 unit tests, no database needed
-npm test --workspace @core/api            # 40 integration tests, needs Postgres
+npm test --workspace @core/api            # 75 integration tests, needs Postgres
 npm run typecheck                         # strict TypeScript across the repo
 npm run build                             # engine, then api, then web and cli
 npm run migrate --workspace @core/api     # apply pending migrations
