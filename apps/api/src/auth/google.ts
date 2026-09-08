@@ -33,16 +33,19 @@ export interface GoogleIdentity {
   readonly emailVerified: boolean;
 }
 
-export function redirectUri(config: Config): string {
-  return `${config.APP_URL.replace(/\/$/, '')}/api/v1/auth/google/callback`;
+export function redirectUri(origin: string): string {
+  return `${origin.replace(/\/$/, '')}/api/v1/auth/google/callback`;
 }
 
 /** A random state value plus the URL to send the browser to. */
-export function buildAuthorizationUrl(config: Config): { url: string; state: string } {
+export function buildAuthorizationUrl(
+  config: Config,
+  origin: string,
+): { url: string; state: string } {
   const state = randomBytes(24).toString('base64url');
   const params = new URLSearchParams({
     client_id: config.GOOGLE_CLIENT_ID ?? '',
-    redirect_uri: redirectUri(config),
+    redirect_uri: redirectUri(origin),
     response_type: 'code',
     scope: 'openid email profile',
     state,
@@ -93,7 +96,11 @@ function decodeIdToken(idToken: string): IdTokenClaims {
  * Throws a user-facing error on anything unexpected; the caller turns that into
  * a redirect carrying a message rather than a raw error page.
  */
-export async function exchangeCode(config: Config, code: string): Promise<GoogleIdentity> {
+export async function exchangeCode(
+  config: Config,
+  code: string,
+  origin: string,
+): Promise<GoogleIdentity> {
   const response = await fetch(TOKEN_ENDPOINT, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -101,7 +108,7 @@ export async function exchangeCode(config: Config, code: string): Promise<Google
       code,
       client_id: config.GOOGLE_CLIENT_ID ?? '',
       client_secret: config.GOOGLE_CLIENT_SECRET ?? '',
-      redirect_uri: redirectUri(config),
+      redirect_uri: redirectUri(origin),
       grant_type: 'authorization_code',
     }),
     signal: AbortSignal.timeout(10_000),

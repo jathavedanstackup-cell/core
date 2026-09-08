@@ -55,8 +55,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     bodyLimit: 5 * 1024 * 1024,
   });
 
+  // Production serves the web app from this same origin, so cross-origin
+  // requests are not part of the design and are refused unless APP_URL names a
+  // separate front end. Development allows any origin for the Vite dev server.
   await app.register(cors, {
-    origin: config.isProduction ? [config.APP_URL] : true,
+    origin: config.isProduction ? (config.APP_URL ?? false) : true,
     credentials: true,
   });
 

@@ -43,8 +43,16 @@ const schema = z.object({
     .default('false')
     .transform((value) => value === 'true'),
 
-  /** Public origin of the web app, used for CORS and for links inside emails. */
-  APP_URL: z.string().url().default('http://localhost:5173'),
+  /**
+   * Public origin of the deployment, e.g. https://core.example.com.
+   *
+   * Optional. Production serves the web app and the API from one origin, so
+   * this is only needed to override what the request itself reports — behind a
+   * proxy that rewrites the host, or when the browser reaches the service on a
+   * different name than the proxy passes through. Leaving it unset makes a
+   * deployment work with no configuration at all.
+   */
+  APP_URL: z.string().url().optional(),
 
   /**
    * Secret used to derive the session cookie signature. Must be set explicitly

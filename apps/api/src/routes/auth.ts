@@ -35,6 +35,7 @@ import { users, type UserRow } from '../db/schema.js';
 import { recordAudit } from '../lib/audit.js';
 import { sendPasswordResetCode, sendVerificationCode } from '../lib/email.js';
 import { AppError, badRequest, notImplemented, unauthorized } from '../lib/errors.js';
+import { publicOrigin } from '../lib/origin.js';
 import { listMemberships, requireUser } from '../plugins/context.js';
 
 const emailSchema = z
@@ -339,14 +340,14 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   // -------------------------------------------------------------------------
   // Google sign-in. Present in the routing table whether or not it is
   // configured, so the client gets an honest answer rather than a 404.
-  app.get('/google/start', async (_request, reply) => {
+  app.get('/google/start', async (request, reply) => {
     if (!config.googleEnabled) {
       throw notImplemented(
         'Google sign-in is not configured on this deployment. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable it.',
       );
     }
 
-    const { url, state } = buildAuthorizationUrl(config);
+    const { url, state } = buildAuthorizationUrl(config, publicOrigin(request));
 
     // The state is held in a short-lived httpOnly cookie and compared on the
     // way back, so a forged callback cannot sign anybody in.
@@ -365,7 +366,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const back = (message: string): void => {
       // Errors return the person to the sign-in page with something readable,
       // rather than leaving them on a bare API response.
-      const target = new URL('/welcome', config.APP_URL);
+      const target = new URL('/welcome', publicOrigin(request));
       target.searchParams.set('step', 'sign-in');
       target.searchParams.set('error', message);
       void reply.redirect(target.toString(), 303);
@@ -407,7 +408,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
     let identity;
     try {
-      identity = await exchangeCode(config, query.code);
+      identity = await exchangeCode(config, query.code, publicOrigin(request));
     } catch (error) {
       back(error instanceof AppError ? error.message : 'Google sign-in failed. Try again.');
       return;
@@ -468,7 +469,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       requestId: String(request.id),
     });
 
-    void reply.redirect(config.APP_URL, 303);
+    void reply.redirect(publicOrigin(request), 303);
   });
 
   // -------------------------------------------------------------------------
