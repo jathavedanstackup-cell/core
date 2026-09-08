@@ -103,9 +103,24 @@ export async function assessOrganization(orgId: string, now = new Date()): Promi
   return { graph, index, findings, prioritized, dataIssues };
 }
 
+/**
+ * Readiness for every entity, carrying the entity's name and kind.
+ *
+ * The engine works in refs; a person reading the page needs "Payroll system",
+ * not "app-payroll", so the name is attached here rather than leaving the
+ * interface to look it up.
+ */
 export async function readinessFor(orgId: string, now = new Date()) {
   const graph = await loadOrganizationGraph(orgId);
-  return assessOrganizationReadiness(graph, { now });
+  const byId = new Map(graph.entities.map((entity) => [entity.id, entity]));
+  return assessOrganizationReadiness(graph, { now }).map((assessment) => {
+    const entity = byId.get(assessment.subjectId);
+    return {
+      ...assessment,
+      subjectName: entity?.name ?? assessment.subjectId,
+      subjectKind: entity?.kind ?? 'service',
+    };
+  });
 }
 
 export async function solutionsForFinding(

@@ -5,9 +5,14 @@
  * drive it through `inject`, and tear it down without binding a port.
  */
 
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 
@@ -77,7 +82,28 @@ export async function buildApp(): Promise<FastifyInstance> {
   // error handler the parent has at the moment it is created -- so
   // registering routes first would leave them on Fastify's default
   // handler and leak its error shape to clients.
+  // In production the API also serves the built web app. One origin means the
+  // session cookie is first-party and CORS never enters the picture.
+  const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
+  const servingWeb = existsSync(join(webRoot, 'index.html'));
+  if (servingWeb) {
+    await app.register(fastifyStatic, { root: webRoot, index: false, wildcard: false });
+  }
+
   app.setNotFoundHandler((request, reply) => {
+    // Anything that is not an API route and not a file is a client-side route,
+    // so hand back the app shell and let the router resolve it.
+    if (
+      servingWeb &&
+      request.method === 'GET' &&
+      !request.url.startsWith('/api/') &&
+      request.url !== '/health' &&
+      request.url !== '/readiness'
+    ) {
+      void reply.type('text/html').sendFile('index.html');
+      return;
+    }
+
     void reply.status(404).send({
       error: { code: 'not_found', message: `No route for ${request.method} ${request.url}.` },
       requestId: request.id,

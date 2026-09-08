@@ -22,7 +22,30 @@ export type Database = NodePgDatabase<typeof schema>;
  * quietly become permanent.
  */
 function resolveSsl(config: Config): pg.PoolConfig['ssl'] {
-  if (!config.isProduction) return false;
+  // Honour libpq's own sslmode parameter when the connection string carries
+  // one. `pg` ignores it once an explicit ssl option is supplied, so it has to
+  // be read here; this is how an operator turns TLS off for a database reached
+  // over a private network, and how the production image can be exercised
+  // against a local Postgres that has no certificate.
+  const sslMode = (() => {
+    try {
+      return new URL(config.DATABASE_URL).searchParams.get('sslmode');
+    } catch {
+      return null;
+    }
+  })();
+
+  if (sslMode === 'disable') {
+    if (config.isProduction) {
+      console.warn(
+        '[db] DATABASE_URL sets sslmode=disable, so the database connection is NOT encrypted. ' +
+          'Only do this when the database is reached over a private network you control.',
+      );
+    }
+    return false;
+  }
+
+  if (!config.isProduction && sslMode === null) return false;
 
   if (config.DATABASE_SSL_INSECURE_SKIP_VERIFY) {
     console.warn(

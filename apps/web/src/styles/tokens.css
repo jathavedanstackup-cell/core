@@ -1,0 +1,194 @@
+/*
+ * C.O.R.E. design tokens.
+ *
+ * The brief for this product is calm, serious, premium and trustworthy — an
+ * executive decision room, not a mission-control HUD. So: warm paper rather
+ * than pure white, ink rather than pure black, one restrained evergreen accent,
+ * and status colours drawn from pigment (oxide red, burnt amber) rather than
+ * from a screen palette. No neon, no cyan, no glow.
+ *
+ * Status is never carried by colour alone; every band also has a label and a
+ * distinct shape in the interface.
+ */
+
+:root {
+  /* Surfaces */
+  --paper: #fbfaf8;
+  --paper-raised: #ffffff;
+  --paper-sunken: #f4f2ee;
+  --paper-inverse: #16181d;
+
+  /* Text */
+  --ink: #17191d;
+  --ink-soft: #4a4f57;
+  --ink-faint: #7a818b;
+  --ink-inverse: #f4f2ee;
+  --ink-inverse-soft: #a8adb5;
+
+  /* Lines */
+  --line: #e4e1db;
+  --line-strong: #cfcbc3;
+
+  /* Accent — evergreen, for stability and for the product's own voice */
+  --accent: #2e5e4e;
+  --accent-hover: #24493d;
+  --accent-soft: #e6efea;
+  --accent-line: #b9d2c7;
+  --on-accent: #f7faf8;
+
+  /* Risk bands */
+  --band-critical: #9e2f2b;
+  --band-critical-soft: #f8eceb;
+  --band-critical-line: #e6c4c2;
+
+  --band-high: #a9631f;
+  --band-high-soft: #fbf1e6;
+  --band-high-line: #ecd3b6;
+
+  --band-moderate: #7a6b33;
+  --band-moderate-soft: #f7f4e8;
+  --band-moderate-line: #ded6b8;
+
+  --band-low: #3f6b57;
+  --band-low-soft: #eef4f1;
+  --band-low-line: #c6dad0;
+
+  --band-neutral: #6b7280;
+  --band-neutral-soft: #f1f2f4;
+  --band-neutral-line: #d9dce0;
+
+  /* Type */
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia,
+    'Times New Roman', serif;
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'Cascadia Code', Consolas, 'SF Mono', Menlo, monospace;
+
+  /* A restrained modular scale. */
+  --step--1: 0.8125rem;
+  --step-0: 0.9375rem;
+  --step-1: 1.0625rem;
+  --step-2: 1.375rem;
+  --step-3: 1.75rem;
+  --step-4: 2.25rem;
+  --step-5: 3rem;
+
+  /* Space */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4rem;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 16px;
+
+  /* Shadows are soft and low; this is paper, not glass. */
+  --shadow-sm: 0 1px 2px rgb(23 25 29 / 6%), 0 1px 1px rgb(23 25 29 / 4%);
+  --shadow: 0 2px 8px rgb(23 25 29 / 6%), 0 1px 2px rgb(23 25 29 / 5%);
+  --shadow-lg: 0 12px 32px rgb(23 25 29 / 10%), 0 2px 8px rgb(23 25 29 / 5%);
+
+  --focus: 0 0 0 2px var(--paper), 0 0 0 4px var(--accent);
+
+  --content-width: 76rem;
+  --reading-width: 40rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #131519;
+    --paper-raised: #1a1d22;
+    --paper-sunken: #0f1114;
+    --paper-inverse: #f4f2ee;
+
+    --ink: #eceae5;
+    --ink-soft: #adb2ba;
+    --ink-faint: #808690;
+    --ink-inverse: #17191d;
+    --ink-inverse-soft: #4a4f57;
+
+    --line: #282c33;
+    --line-strong: #3a3f47;
+
+    --accent: #7fb3a0;
+    --accent-hover: #96c2b2;
+    --accent-soft: #1b2723;
+    --accent-line: #2f4a40;
+    --on-accent: #10201a;
+
+    --band-critical: #e08a86;
+    --band-critical-soft: #2a1a19;
+    --band-critical-line: #4d2b29;
+
+    --band-high: #ddA25c;
+    --band-high-soft: #2a2118;
+    --band-high-line: #4d3a22;
+
+    --band-moderate: #c9b976;
+    --band-moderate-soft: #26241a;
+    --band-moderate-line: #443f28;
+
+    --band-low: #86b8a0;
+    --band-low-soft: #18241f;
+    --band-low-line: #2c4237;
+
+    --band-neutral: #9aa1ab;
+    --band-neutral-soft: #1d2025;
+    --band-neutral-line: #333941;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+    --shadow: 0 2px 10px rgb(0 0 0 / 45%);
+    --shadow-lg: 0 16px 40px rgb(0 0 0 / 55%);
+
+    --focus: 0 0 0 2px var(--paper), 0 0 0 4px var(--accent);
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #131519;
+  --paper-raised: #1a1d22;
+  --paper-sunken: #0f1114;
+  --paper-inverse: #f4f2ee;
+
+  --ink: #eceae5;
+  --ink-soft: #adb2ba;
+  --ink-faint: #808690;
+  --ink-inverse: #17191d;
+  --ink-inverse-soft: #4a4f57;
+
+  --line: #282c33;
+  --line-strong: #3a3f47;
+
+  --accent: #7fb3a0;
+  --accent-hover: #96c2b2;
+  --accent-soft: #1b2723;
+  --accent-line: #2f4a40;
+  --on-accent: #10201a;
+
+  --band-critical: #e08a86;
+  --band-critical-soft: #2a1a19;
+  --band-critical-line: #4d2b29;
+
+  --band-high: #dda25c;
+  --band-high-soft: #2a2118;
+  --band-high-line: #4d3a22;
+
+  --band-moderate: #c9b976;
+  --band-moderate-soft: #26241a;
+  --band-moderate-line: #443f28;
+
+  --band-low: #86b8a0;
+  --band-low-soft: #18241f;
+  --band-low-line: #2c4237;
+
+  --band-neutral: #9aa1ab;
+  --band-neutral-soft: #1d2025;
+  --band-neutral-line: #333941;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow: 0 2px 10px rgb(0 0 0 / 45%);
+  --shadow-lg: 0 16px 40px rgb(0 0 0 / 55%);
+}

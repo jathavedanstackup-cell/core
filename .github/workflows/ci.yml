@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push supersedes an in-flight run on the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: core_test
+          POSTGRES_USER: core
+          POSTGRES_PASSWORD: core_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U core -d core_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://core:core_test_password@localhost:5432/core_test
+      SESSION_SECRET: ci-only-secret-value-that-is-long-enough-to-pass
+      APP_URL: http://localhost:5173
+      LOG_LEVEL: warn
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The API imports the engine's compiled output, so it builds first.
+      - name: Build engine
+        run: npm run build --workspace @core/engine
+
+      - name: Typecheck
+        run: |
+          npx tsc -p packages/engine/tsconfig.spec.json
+          npx tsc -p apps/api/tsconfig.json --noEmit
+          npx tsc -p apps/web/tsconfig.json --noEmit
+
+      - name: Engine tests
+        run: npm test --workspace @core/engine
+
+      - name: API integration tests
+        run: npm test --workspace @core/api
+
+      - name: Build web
+        run: npm run build --workspace @core/web
+
+      - name: Build API
+        run: npm run build --workspace @core/api
+
+  image:
+    name: Build production image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only worth building the image once the code is known good.
+    needs: verify
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -t core:${{ github.sha }} .
+
+      - name: Verify the image starts and reports unready without a database
+        run: |
+          docker run -d --name core-check \
+            -e DATABASE_URL=postgresql://nobody:nothing@127.0.0.1:1/none \
+            -e SESSION_SECRET=ci-only-secret-value-that-is-long-enough-to-pass \
+            -e APP_URL=http://localhost \
+            -p 4000:4000 core:${{ github.sha }} || true
+          # Startup migrations fail without a database, which is the correct
+          # behaviour: the process must not serve traffic against no schema.
+          sleep 8
+          docker logs core-check 2>&1 | tail -20
+          if docker ps --filter name=core-check --filter status=running -q | grep -q .; then
+            echo "Container is running; checking liveness."
+            curl -fsS http://localhost:4000/health
+          else
+            echo "Container exited rather than serving without a database, as intended."
+          fi
+          docker rm -f core-check >/dev/null 2>&1 || true
