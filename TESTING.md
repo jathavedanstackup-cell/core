@@ -1,18 +1,18 @@
 # Testing
 
-115 tests. None of them exist to raise a number; each asserts a behaviour the
+129 tests. None of them exist to raise a number; each asserts a behaviour the
 product would be wrong without.
 
 ```bash
-npm test --workspace @core/engine   # 95 tests, ~2s, no database
-npm test --workspace @core/api      # 20 tests, ~8s, needs PostgreSQL
+npm test --workspace @core/engine   # 95 tests, ~3s, no database
+npm test --workspace @core/api      # 34 tests, ~11s, needs PostgreSQL
 ```
 
 ---
 
 ## Engine — 95 unit tests
 
-Pure functions, no infrastructure, so they run in about two seconds and can be
+Pure functions, no infrastructure, so they run in about three seconds and can be
 kept in a watch loop.
 
 | Area | What is asserted |
@@ -35,7 +35,7 @@ Two tests exist purely to hold the product to its own claims:
 
 ---
 
-## API — 20 integration tests
+## API — 34 integration tests
 
 Real PostgreSQL, real Fastify via `inject`. Deliberately not mocked: tenant
 isolation, authorization and database constraints are exactly the things a mock
@@ -54,6 +54,15 @@ would wave through.
 | Actions | The state machine rejects illegal transitions in both directions; completion always records a time |
 | Imports | A dependency referencing something absent from the file aborts the whole import, leaving nothing behind |
 | Errors | A stable shape with a request id, and never a stack trace |
+| Exercises | The expectation is captured at start and not before; an exercise cannot start twice; events are refused unless it is running; the review compares expected against actual; recommendations reach the improvement register |
+| Improvements | Its own state machine, and a completion that always carries a time |
+| Reports | Every format produces a real file; the PDF really is a PDF (`%PDF-` header, `%%EOF` trailer); CSV escapes quotes and commas; a stored report is reopened as issued, not regenerated from newer data |
+
+One of these caught a real defect while being written. An exercise where nobody
+recorded a recovery time was falling back to the moment someone clicked
+"complete", which credited it with a near-zero recovery and a met objective —
+precisely the fabricated success the product forbids. The fallback now only
+accepts a recorded recovery event, and reports "could not assess" otherwise.
 
 ---
 
@@ -87,6 +96,12 @@ Stated plainly:
 - **The web app has no unit tests.** Its logic is thin — the substance lives in
   the engine, which is heavily covered — but the components themselves are
   unverified except by hand.
+- **Google sign-in is untested end to end.** The flow is implemented and its
+  claim validation is straightforward to read, but exercising it needs real
+  Google credentials, which this project does not have. Treat it as unproven
+  until someone runs it against a real client id.
+- **The CLI has no automated tests.** Its commands were exercised by hand
+  against the demo organization; they delegate to services the API tests cover.
 - **The introduction's audio** is unverifiable automatically and was checked only
   by listening.
 

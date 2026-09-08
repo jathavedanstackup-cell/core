@@ -25,6 +25,8 @@ export function WelcomePage(): ReactNode {
   const { status, me, refresh } = useSession();
 
   const initialStep = (params.get('step') as Step | null) ?? 'choose';
+  // The Google callback redirects here with a readable message on failure.
+  const redirectError = params.get('error');
   const [step, setStep] = useState<Step>(initialStep);
   const [email, setEmail] = useState(params.get('email') ?? '');
   const [name, setName] = useState('');
@@ -99,6 +101,12 @@ export function WelcomePage(): ReactNode {
           <p className="auth-wordmark">Continuity · Operations · Risk · Execution</p>
         </header>
 
+        {redirectError !== null && (
+          <p className="notice notice-error" role="alert" style={{ marginTop: 'var(--s-5)' }}>
+            {redirectError}
+          </p>
+        )}
+
         {step === 'choose' && (
           <div className="auth-card card stack">
             <div>
@@ -170,7 +178,22 @@ export function WelcomePage(): ReactNode {
             </button>
 
             {capabilities?.googleSignIn === true && (
-              <button type="button" className="btn">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  // The server builds the URL and sets the state cookie, so the
+                  // client never holds the client id or invents the state.
+                  void api
+                    .get<{ url: string }>('/api/v1/auth/google/start')
+                    .then((response) => {
+                      window.location.assign(response.url);
+                    })
+                    .catch((caught: unknown) => {
+                      setError(caught instanceof ApiError ? caught : null);
+                    });
+                }}
+              >
                 Continue with Google
               </button>
             )}

@@ -54,11 +54,16 @@ jobs:
       - name: Build engine
         run: npm run build --workspace @core/engine
 
+      # The API emits declarations the CLI imports, so it builds before the
+      # CLI is typechecked.
+      - name: Build API
+        run: npm run build --workspace @core/api
+
       - name: Typecheck
         run: |
           npx tsc -p packages/engine/tsconfig.spec.json
-          npx tsc -p apps/api/tsconfig.json --noEmit
           npx tsc -p apps/web/tsconfig.json --noEmit
+          npx tsc -p apps/cli/tsconfig.json --noEmit
 
       - name: Engine tests
         run: npm test --workspace @core/engine
@@ -69,8 +74,8 @@ jobs:
       - name: Build web
         run: npm run build --workspace @core/web
 
-      - name: Build API
-        run: npm run build --workspace @core/api
+      - name: Build CLI
+        run: npm run build --workspace @core/cli
 
   image:
     name: Build production image

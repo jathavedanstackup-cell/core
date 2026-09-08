@@ -23,7 +23,8 @@
     "fastify": "^5.2.1",
     "nodemailer": "^6.10.0",
     "pg": "^8.13.1",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "pdfkit": "^0.15.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
@@ -31,6 +32,16 @@
     "@types/pg": "^8.11.10",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.5"
+    "vitest": "^3.0.5",
+    "@types/pdfkit": "^0.13.9"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./app": "./dist/app.js",
+    "./config": "./dist/config.js",
+    "./db/client": "./dist/db/client.js",
+    "./db/schema": "./dist/db/schema.js",
+    "./db/migrate": "./dist/db/migrate.js",
+    "./services/*": "./dist/services/*.js"
   }
 }

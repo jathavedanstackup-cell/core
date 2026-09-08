@@ -598,3 +598,17 @@ table.data tr:last-child td {
     grid-template-columns: 2rem 1fr;
   }
 }
+
+/* A bare input for inline forms, where a full .field label would be noise. */
+.plain-input {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: inherit;
+  width: 100%;
+}
+.plain-input:focus-visible {
+  border-color: var(--accent);
+}

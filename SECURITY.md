@@ -136,6 +136,31 @@ Standard headers are set on every response: `x-content-type-options: nosniff`,
 
 ---
 
+## Google sign-in
+
+The authorization-code flow, server side. Notes on the choices:
+
+- **State** is a random 24-byte value held in a short-lived httpOnly cookie and
+  compared in constant time on the callback, so a forged callback cannot sign
+  anyone in.
+- **The ID token's signature is not checked**, and that is correct here: the
+  token is fetched by this server directly from Google's token endpoint over
+  TLS, in a request authenticated with the client secret. Google's own guidance
+  is that a token obtained that way needs no signature check, because the
+  transport already establishes who sent it. A signature check *would* be
+  required if the token arrived from the browser; it never does.
+- **The claims are still validated** — issuer, audience, expiry — because those
+  describe the token's content rather than its origin.
+- **An unverified Google email is refused.** Accepting one would let anybody who
+  claimed an address take over the C.O.R.E. account registered with it.
+- **Linking** an existing account by email is allowed only because Google has
+  confirmed the address is verified.
+
+Unset credentials disable the feature: the button does not appear and the
+endpoint says it is unconfigured.
+
+---
+
 ## Not done yet
 
 Stated plainly so nobody assumes otherwise:
@@ -145,9 +170,6 @@ Stated plainly so nobody assumes otherwise:
 - **No CSRF token.** Currently mitigated by `sameSite=lax` plus the fact that
   every state-changing endpoint requires a JSON content type. A token should be
   added.
-- **Google sign-in is incomplete.** The authorization-code exchange is not
-  implemented; the callback returns an explicit "not implemented" error rather
-  than a partial sign-in.
 - **No file upload.** Import accepts JSON only. There is no upload endpoint and
   therefore no file-validation surface — but any future upload path needs type,
   size and content validation before it ships.

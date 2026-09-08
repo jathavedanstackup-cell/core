@@ -78,6 +78,7 @@ weaknesses in it, or create your own and start adding what you depend on.
 packages/engine   deterministic domain logic — no I/O, no network, no model calls
 apps/api          Fastify + Drizzle + PostgreSQL; auth, tenancy, persistence
 apps/web          React + Vite; the product interface and the introduction
+apps/cli          operator command line, calling the same services as the API
 scripts/smoke.sh  post-deployment verification
 ```
 
@@ -111,10 +112,25 @@ what matters right now, and everything else is disclosed underneath it.
 ```bash
 npm test                                  # every workspace
 npm test --workspace @core/engine         # 95 unit tests, no database needed
-npm test --workspace @core/api            # 20 integration tests, needs Postgres
+npm test --workspace @core/api            # 34 integration tests, needs Postgres
 npm run typecheck                         # strict TypeScript across the repo
-npm run build                             # engine, then web, then api
+npm run build                             # engine, then api, then web and cli
 npm run migrate --workspace @core/api     # apply pending migrations
+```
+
+### The command line
+
+`apps/cli` calls the same services the HTTP API calls, so a CLI answer and a
+browser answer cannot diverge. It talks straight to the database, which makes it
+an operator's tool rather than an end-user one.
+
+```bash
+npm run dev --workspace @core/cli -- orgs
+npm run dev --workspace @core/cli -- assess Meridian --tier FIX_FIRST
+npm run dev --workspace @core/cli -- scenario Meridian vendor-cloud
+npm run dev --workspace @core/cli -- solve Meridian single_person:p-priya
+npm run dev --workspace @core/cli -- report Meridian risk --format pdf --out risk.pdf
+npm run dev --workspace @core/cli -- validate Meridian
 ```
 
 ---
@@ -131,10 +147,12 @@ npm run migrate --workspace @core/api     # apply pending migrations
 
 ## Status
 
-Working end to end: accounts and verification, organizations and roles, the
-model, assessment, solutions, scenarios, actions, incidents with timelines, and
-the audit trail.
+Working end to end: accounts, email verification and Google sign-in;
+organizations and roles; the model and its import; assessment, solutions and
+scenarios; actions; incidents with timelines; exercises with after-action
+review; the improvement register; reports exported as PDF, HTML, CSV and JSON;
+the audit trail; and the command line.
 
-Not built: exercise mode, after-action review, PDF and CSV export, the CLI, and
-the Google authorization-code exchange. `docs/ROADMAP.md` is kept honest about
-this; nothing in the interface pretends these exist.
+Not built: point-in-time replay of a past organization state, and natural
+language querying. `docs/ROADMAP.md` is kept honest about this, and nothing in
+the interface pretends otherwise.

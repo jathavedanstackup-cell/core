@@ -1,0 +1,23 @@
+{
+  "name": "@core/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "core": "./dist/index.js" },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@core/api": "*",
+    "@core/engine": "*",
+    "commander": "^13.1.0",
+    "drizzle-orm": "^0.38.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

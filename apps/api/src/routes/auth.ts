@@ -11,13 +11,17 @@
  *    alike, so the endpoint cannot be used to enumerate accounts.
  */
 
-import { randomUUID } from 'node:crypto';
-
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { checkCode, issueCode } from '../auth/codes.js';
+import {
+  buildAuthorizationUrl,
+  exchangeCode,
+  STATE_COOKIE,
+  stateMatches,
+} from '../auth/google.js';
 import { hashPassword, passwordProblems, verifyPassword } from '../auth/password.js';
 import {
   createSession,
@@ -30,7 +34,7 @@ import { getDb } from '../db/client.js';
 import { users, type UserRow } from '../db/schema.js';
 import { recordAudit } from '../lib/audit.js';
 import { sendPasswordResetCode, sendVerificationCode } from '../lib/email.js';
-import { badRequest, notImplemented, unauthorized } from '../lib/errors.js';
+import { AppError, badRequest, notImplemented, unauthorized } from '../lib/errors.js';
 import { listMemberships, requireUser } from '../plugins/context.js';
 
 const emailSchema = z
@@ -335,33 +339,136 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   // -------------------------------------------------------------------------
   // Google sign-in. Present in the routing table whether or not it is
   // configured, so the client gets an honest answer rather than a 404.
-  app.get('/google/start', async () => {
+  app.get('/google/start', async (_request, reply) => {
     if (!config.googleEnabled) {
       throw notImplemented(
         'Google sign-in is not configured on this deployment. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable it.',
       );
     }
-    const state = randomUUID();
-    const params = new URLSearchParams({
-      client_id: config.GOOGLE_CLIENT_ID ?? '',
-      redirect_uri: `${config.APP_URL}/auth/google/callback`,
-      response_type: 'code',
-      scope: 'openid email profile',
-      state,
-      prompt: 'select_account',
+
+    const { url, state } = buildAuthorizationUrl(config);
+
+    // The state is held in a short-lived httpOnly cookie and compared on the
+    // way back, so a forged callback cannot sign anybody in.
+    void reply.setCookie(STATE_COOKIE, state, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: config.isProduction,
+      path: '/api/v1/auth',
+      maxAge: 600,
     });
-    return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`, state };
+
+    return { url };
   });
 
-  app.get('/google/callback', async () => {
+  app.get('/google/callback', async (request, reply) => {
+    const back = (message: string): void => {
+      // Errors return the person to the sign-in page with something readable,
+      // rather than leaving them on a bare API response.
+      const target = new URL('/welcome', config.APP_URL);
+      target.searchParams.set('step', 'sign-in');
+      target.searchParams.set('error', message);
+      void reply.redirect(target.toString(), 303);
+    };
+
     if (!config.googleEnabled) {
-      throw notImplemented(
-        'Google sign-in is not configured on this deployment. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable it.',
-      );
+      back('Google sign-in is not configured on this deployment.');
+      return;
     }
-    throw notImplemented(
-      'Google sign-in is not finished. The authorization code exchange is not implemented yet, so this deployment cannot complete a Google sign-in.',
+
+    const query = z
+      .object({
+        code: z.string().min(1).optional(),
+        state: z.string().min(1).optional(),
+        error: z.string().optional(),
+      })
+      .parse(request.query);
+
+    void reply.clearCookie(STATE_COOKIE, { path: '/api/v1/auth' });
+
+    if (query.error !== undefined) {
+      back('Google sign-in was cancelled.');
+      return;
+    }
+
+    const expected = request.cookies[STATE_COOKIE];
+    if (
+      query.state === undefined ||
+      expected === undefined ||
+      !stateMatches(query.state, expected)
+    ) {
+      back('That sign-in link has expired. Try again.');
+      return;
+    }
+    if (query.code === undefined) {
+      back('Google did not return an authorization code.');
+      return;
+    }
+
+    let identity;
+    try {
+      identity = await exchangeCode(config, query.code);
+    } catch (error) {
+      back(error instanceof AppError ? error.message : 'Google sign-in failed. Try again.');
+      return;
+    }
+
+    const db = getDb();
+    let user = (
+      await db.select().from(users).where(eq(users.googleSubject, identity.subject)).limit(1)
+    )[0];
+
+    if (user === undefined) {
+      // Link to an existing account with the same address. Safe because Google
+      // has told us the address is verified, and we refuse it otherwise.
+      const existing = await findByEmail(identity.email);
+      if (existing !== undefined) {
+        const [linked] = await db
+          .update(users)
+          .set({
+            googleSubject: identity.subject,
+            emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, existing.id))
+          .returning();
+        user = linked ?? existing;
+      } else {
+        const [created] = await db
+          .insert(users)
+          .values({
+            email: identity.email,
+            name: identity.name,
+            googleSubject: identity.subject,
+            emailVerifiedAt: new Date(),
+          })
+          .returning();
+        user = created;
+      }
+    }
+
+    if (user === undefined) {
+      back('Could not create an account for that Google profile.');
+      return;
+    }
+
+    const session = await createSession(user.id, request.headers['user-agent']);
+    void reply.setCookie(
+      cookieName,
+      session.token,
+      sessionCookieOptions(config.SESSION_TTL_HOURS * 3600),
     );
+
+    await recordAudit({
+      actorId: user.id,
+      actorEmail: user.email,
+      entityType: 'user',
+      entityId: user.id,
+      action: 'login_google',
+      requestId: String(request.id),
+    });
+
+    void reply.redirect(config.APP_URL, 303);
   });
 
   // -------------------------------------------------------------------------

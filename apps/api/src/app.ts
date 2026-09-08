@@ -23,10 +23,13 @@ import { registerActionRoutes } from './routes/actions.js';
 import { registerAssessmentRoutes } from './routes/assessment.js';
 import { registerAuditRoutes } from './routes/audit.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerExerciseRoutes } from './routes/exercises.js';
 import { registerHealthRoutes } from './routes/health.js';
+import { registerImprovementRoutes } from './routes/improvements.js';
 import { registerIncidentRoutes } from './routes/incidents.js';
 import { registerModelRoutes } from './routes/model.js';
 import { registerOrganizationRoutes } from './routes/organizations.js';
+import { registerReportRoutes } from './routes/reports.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const config = loadConfig();
@@ -166,6 +169,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerAssessmentRoutes, { prefix: '/api/v1' });
   await app.register(registerActionRoutes, { prefix: '/api/v1/actions' });
   await app.register(registerIncidentRoutes, { prefix: '/api/v1/incidents' });
+  await app.register(registerExerciseRoutes, { prefix: '/api/v1/exercises' });
+  await app.register(registerImprovementRoutes, { prefix: '/api/v1/improvements' });
+  await app.register(registerReportRoutes, { prefix: '/api/v1/reports' });
   await app.register(registerAuditRoutes, { prefix: '/api/v1/audit' });
 
   return app;

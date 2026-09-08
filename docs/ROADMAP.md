@@ -30,7 +30,7 @@ Deterministic, no I/O, 95 tests.
 
 ### The API — `apps/api`
 
-PostgreSQL, tenant isolation, 20 integration tests.
+PostgreSQL, tenant isolation, 34 integration tests.
 
 - Immutable plain-SQL migrations, applied at startup before the port binds
 - Email and password authentication with scrypt, mandatory verification, opaque
@@ -42,6 +42,9 @@ PostgreSQL, tenant isolation, 20 integration tests.
 - Assessment, readiness, solutions, scenarios with stored runs
 - Actions with a real state machine and a database-enforced completion time
 - Incidents with chronological timelines
+- Exercises, after-action review, and the improvement register
+- Reports in JSON, CSV, HTML and PDF, stored as issued
+- Google sign-in (authorization-code flow, server side)
 - Append-only audit trail with before and after
 - `/health` and `/readiness`
 
@@ -60,6 +63,33 @@ PostgreSQL, tenant isolation, 20 integration tests.
 - Actions, incidents with timelines, audit trail
 - Light and dark, keyboard operable, status never carried by colour alone
 
+### Rehearsal and learning — `apps/api`, `apps/web`
+
+- Exercises: plan, start, record, complete. Starting freezes the engine's
+  expectation so the review compares against what was predicted at the time,
+  not against a model the exercise itself changed.
+- After-action review generated from the difference between expectation and
+  what participants recorded: timing against objective, what worked, what did
+  not, what was missing, and **what surprised us** — anything observed that the
+  model did not predict, which is a gap in the model itself.
+- An improvement register, separate from actions, with its own state machine.
+  A review's recommendations are accepted into it as an explicit decision.
+
+### Reports — `apps/api`, `apps/web`
+
+- Six report kinds built as one neutral document model and rendered to **JSON,
+  CSV, HTML and PDF**. The PDF is generated server-side with PDFKit, so the file
+  is identical for everyone who downloads it.
+- Generated reports are stored and reopened exactly as issued, so two people
+  holding "the same report" cannot disagree.
+- Every report states its own assumptions and limits.
+
+### The command line — `apps/cli`
+
+`migrate`, `orgs`, `validate`, `assess`, `readiness`, `scenario`, `solve`,
+`report`, `seed-demo`. Calls the same services as the HTTP API, so a CLI answer
+and a browser answer cannot diverge.
+
 ### Delivery
 
 - Multi-stage Dockerfile; one image serves the API and the web app from one
@@ -74,20 +104,14 @@ PostgreSQL, tenant isolation, 20 integration tests.
 
 These are absent, not partial:
 
-- **Exercise mode** and **after-action review** (spec §32–34). The incident
-  timeline and action tracking are the foundation for them, but neither exists.
-- **Report generation and export** (§39–40, §98–99). No PDF, no CSV. Reports
-  would be assembled from data that is already there, but nothing generates them.
-- **The CLI** (§67). The service layer is structured so a CLI can call the same
-  logic, but no CLI exists.
-- **Google sign-in.** The routes exist and report honestly that the
-  authorization-code exchange is not implemented; they do not half-work.
-- **Replay and point-in-time reconstruction** (§36). The audit trail records
-  changes, but nothing reconstructs a past state from them.
+- **Replay and point-in-time reconstruction** (§36). The audit trail records what
+  changed, but nothing reconstructs a past organization state from it. An
+  exercise's expectation is frozen at its start, which covers the case that
+  matters most, but the general capability does not exist.
 - **Natural-language interaction** (§42). Everything is driven through explicit
-  professional controls.
-- **Preventive improvements as first-class records** (§27). Solutions produce
-  actions; there is no separate improvement register.
+  professional controls. The spec allows this — it says natural language must not
+  be the only way to operate the system — but the natural-language surface itself
+  is not there.
 
 ---
 
@@ -106,7 +130,7 @@ These are absent, not partial:
 ## Decisions worth knowing
 
 - **Monorepo, npm workspaces, TypeScript throughout**, so the API, the web app
-  and a future CLI share one language and one engine.
+  and the CLI share one language and one engine.
 - **The engine is pure.** Every other layer may fail or be slow; a risk
   conclusion must not depend on that.
 - **AI is absent from the core.** Nothing in the analysis path calls a model.

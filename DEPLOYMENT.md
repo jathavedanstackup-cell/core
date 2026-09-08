@@ -110,10 +110,25 @@ service picks it up on the next deploy and stops writing codes to the log.
 Unset, the Google button does not appear and the endpoint reports that it is
 unconfigured rather than failing obscurely.
 
-**The authorization-code exchange is not implemented.** Setting these variables
-will surface the button and produce a working redirect to Google, but the
-callback will return a clear "not implemented" error. Do not enable it expecting
-a working sign-in.
+To enable it:
+
+1. Go to **https://console.cloud.google.com/apis/credentials**
+2. **Create credentials → OAuth client ID → Web application**
+3. Under **Authorised redirect URIs**, add exactly:
+   `https://your-service.onrender.com/api/v1/auth/google/callback`
+   (this must match `APP_URL` + `/api/v1/auth/google/callback` character for
+   character, or Google refuses the exchange)
+4. Copy the client ID and secret into `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET` in the Render service environment
+
+The flow is implemented server-side: state is held in a short-lived httpOnly
+cookie and compared on the callback, the code is exchanged directly with Google
+over TLS, and the resulting identity is refused if the address is unverified.
+
+**Untested against a live Google client.** The code is written and reviewable
+but this project has no Google credentials, so nobody has run it end to end.
+Expect to debug the redirect URI on first use — that is where this flow usually
+goes wrong.
 
 ---
 

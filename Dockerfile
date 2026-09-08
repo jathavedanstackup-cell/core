@@ -13,11 +13,14 @@ FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 
-# Manifests first: this layer is cached until a dependency actually changes.
+# Every workspace manifest, before the sources: this layer stays cached until a
+# dependency actually changes. Missing one here means its dependencies are
+# absent from the install, and its build then fails in a confusing way.
 COPY package.json package-lock.json ./
 COPY packages/engine/package.json packages/engine/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
+COPY apps/cli/package.json apps/cli/
 
 RUN npm ci --workspaces --include-workspace-root
 
@@ -25,10 +28,16 @@ COPY tsconfig.base.json ./
 COPY packages/ packages/
 COPY apps/ apps/
 
-# The API depends on the engine's compiled output, so the engine builds first.
-RUN npm run build --workspace @core/engine \
- && npm run build --workspace @core/web \
- && npm run build --workspace @core/api
+# Build order matters: the API imports the engine's compiled output, and the
+# CLI imports the API's emitted type declarations.
+RUN npm run build --workspace @core/engine
+RUN npm run build --workspace @core/api
+RUN npm run build --workspace @core/web
+RUN npm run build --workspace @core/cli
+
+# Fail loudly here rather than at a COPY in the runtime stage, where the error
+# only says a path was not found.
+RUN test -f apps/api/dist/index.js && test -f apps/cli/dist/index.js
 
 # The web bundle is served by the API, so it moves next to it.
 RUN mkdir -p apps/api/public && cp -r apps/web/dist/. apps/api/public/
@@ -57,9 +66,14 @@ COPY --from=build --chown=node:node /app/apps/api/drizzle apps/api/drizzle/
 COPY --from=build --chown=node:node /app/apps/api/public apps/api/public/
 COPY --from=build --chown=node:node /app/apps/api/package.json apps/api/package.json
 
-# There is deliberately no apps/api/node_modules here: npm workspaces hoists
-# every dependency to the root node_modules, and the @core/engine entry there is
-# a symlink into packages/engine, which is copied above.
+# The operator CLI ships too, so it can be run against a live deployment:
+#   docker exec <container> node apps/cli/dist/index.js assess <org>
+COPY --from=build --chown=node:node /app/apps/cli/dist apps/cli/dist/
+COPY --from=build --chown=node:node /app/apps/cli/package.json apps/cli/package.json
+
+# There is deliberately no apps/*/node_modules here: npm workspaces hoists every
+# dependency to the root node_modules, and the @core/engine and @core/api
+# entries there are symlinks into the directories copied above.
 
 USER node
 EXPOSE 4000

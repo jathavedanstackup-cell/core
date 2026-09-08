@@ -309,6 +309,127 @@ export const auditEvents = pgTable(
   ],
 );
 
+
+// ---------------------------------------------------------------------------
+// Rehearsal and learning
+// ---------------------------------------------------------------------------
+
+/**
+ * An exercise is a rehearsal of a failure.
+ *
+ * `expectedResult` is the engine's prediction captured at the moment the
+ * exercise starts, and is never recomputed. The model may change afterwards,
+ * and a review that silently moved with it would not be a review.
+ */
+export const exercises = pgTable(
+  'exercises',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    reference: text('reference').notNull(),
+    title: text('title').notNull(),
+    objective: text('objective'),
+    scenarioRefs: jsonb('scenario_refs').$type<string[]>().notNull().default([]),
+    expectedResult: jsonb('expected_result'),
+    /** PLANNED | RUNNING | COMPLETED | CANCELLED */
+    status: text('status').notNull().default('PLANNED'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    expectedRecoveryMinutes: integer('expected_recovery_minutes'),
+    actualRecoveryMinutes: integer('actual_recovery_minutes'),
+    review: jsonb('review'),
+    ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('exercises_org_reference_key').on(table.orgId, table.reference),
+    index('exercises_org_status_idx').on(table.orgId, table.status),
+  ],
+);
+
+export const exerciseEvents = pgTable(
+  'exercise_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    exerciseId: uuid('exercise_id')
+      .notNull()
+      .references(() => exercises.id, { onDelete: 'cascade' }),
+    /** injection | decision | action | observation | gap | recovery | note */
+    kind: text('kind').notNull(),
+    description: text('description').notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('exercise_events_exercise_occurred_idx').on(table.exerciseId, table.occurredAt)],
+);
+
+/**
+ * A preventive improvement answers "how do we make this less likely next time?".
+ * Distinct from an action, which closes a specific weakness now.
+ */
+export const improvements = pgTable(
+  'improvements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    rationale: text('rationale'),
+    expectedBenefit: text('expected_benefit'),
+    verification: text('verification'),
+    priority: text('priority').notNull().default('P2'),
+    /** PROPOSED | ACCEPTED | IN_PROGRESS | COMPLETED | DECLINED */
+    status: text('status').notNull().default('PROPOSED'),
+    ownerHint: text('owner_hint'),
+    assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
+    sourceExerciseId: uuid('source_exercise_id').references(() => exercises.id, {
+      onDelete: 'set null',
+    }),
+    sourceIncidentId: uuid('source_incident_id').references(() => incidents.id, {
+      onDelete: 'set null',
+    }),
+    sourceFindingRef: text('source_finding_ref'),
+    dueAt: timestamp('due_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('improvements_org_status_idx').on(table.orgId, table.status),
+    index('improvements_org_source_idx').on(table.orgId, table.sourceExerciseId),
+  ],
+);
+
+/**
+ * A generated report, stored so a document handed to a board can be reopened
+ * exactly as it was rather than quietly regenerated from newer data.
+ */
+export const reports = pgTable(
+  'reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    title: text('title').notNull(),
+    payload: jsonb('payload').notNull(),
+    generatedBy: uuid('generated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('reports_org_created_idx').on(table.orgId, table.createdAt)],
+);
+
 // ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
@@ -337,3 +458,7 @@ export type ActionRow = typeof actions.$inferSelect;
 export type IncidentRow = typeof incidents.$inferSelect;
 export type IncidentEventRow = typeof incidentEvents.$inferSelect;
 export type ScenarioRunRow = typeof scenarioRuns.$inferSelect;
+export type ExerciseRow = typeof exercises.$inferSelect;
+export type ExerciseEventRow = typeof exerciseEvents.$inferSelect;
+export type ImprovementRow = typeof improvements.$inferSelect;
+export type ReportRow = typeof reports.$inferSelect;

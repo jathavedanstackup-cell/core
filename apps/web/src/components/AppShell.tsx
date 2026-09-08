@@ -12,12 +12,17 @@ import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '../state/session';
 import './shell.css';
 
+// Ordered by the loop the product describes: understand, respond, recover,
+// improve. Audit sits last because it is a record, not a place to work.
 const NAV = [
   { to: '', label: 'Workspace', end: true },
   { to: 'readiness', label: 'Readiness' },
   { to: 'scenarios', label: 'Scenarios' },
   { to: 'actions', label: 'Actions' },
   { to: 'incidents', label: 'Incidents' },
+  { to: 'exercises', label: 'Exercises' },
+  { to: 'improvements', label: 'Improvements' },
+  { to: 'reports', label: 'Reports' },
   { to: 'audit', label: 'Audit' },
 ];
 
