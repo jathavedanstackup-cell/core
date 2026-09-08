@@ -19,3 +19,7 @@ npm-debug.log*
 .vite/
 .cache/
 tmp/
+
+# tsc must never emit next to the sources; vite does the bundling.
+apps/web/src/**/*.js
+apps/web/vite.config.js
