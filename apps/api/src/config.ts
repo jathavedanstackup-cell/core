@@ -91,6 +91,23 @@ const schema = z.object({
 
   MAIL_FROM: z.string().default('C.O.R.E. <no-reply@core.local>'),
 
+  /**
+   * One-time escape from the chicken-and-egg problem on a fresh deployment:
+   * verification needs email, and configuring email needs someone signed in.
+   *
+   * When this is on, the first account to register on a deployment where
+   * nobody has verified yet is verified immediately and signed in. It stops
+   * applying the moment any account is verified, so it cannot be used twice,
+   * and it is off unless deliberately switched on.
+   *
+   * Turn it on, register, then remove it. It is not a substitute for
+   * configuring email — everyone after the first account still needs a code.
+   */
+  BOOTSTRAP_FIRST_ACCOUNT: z
+    .string()
+    .default('false')
+    .transform((value) => value === 'true'),
+
   /** Allows anyone signed in to create the labelled demo organization. */
   DEMO_MODE_ENABLED: z
     .string()

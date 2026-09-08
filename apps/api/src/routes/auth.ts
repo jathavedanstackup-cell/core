@@ -12,7 +12,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { checkCode, issueCode } from '../auth/codes.js';
@@ -80,6 +80,22 @@ async function findByEmail(email: string): Promise<UserRow | undefined> {
   return rows[0];
 }
 
+/**
+ * Whether anybody has ever finished signing up here.
+ *
+ * Counts verified accounts, not rows: an abandoned half-finished signup — or a
+ * stranger poking at the URL — must not lock the operator out of their own
+ * fresh deployment. This is what makes the bootstrap below self-disabling.
+ */
+async function noOneHasVerifiedYet(): Promise<boolean> {
+  const rows = await getDb()
+    .select({ id: users.id })
+    .from(users)
+    .where(isNotNull(users.emailVerifiedAt))
+    .limit(1);
+  return rows.length === 0;
+}
+
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   const config = loadConfig();
   const cookieName = config.SESSION_COOKIE_NAME;
@@ -110,8 +126,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         .returning();
 
       if (created !== undefined) {
-        const code = await issueCode(created.id, 'email_verification');
-        await sendVerificationCode(created.email, created.name, code);
         await recordAudit({
           actorId: created.id,
           actorEmail: created.email,
@@ -120,6 +134,65 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           action: 'register',
           requestId: String(request.id),
         });
+
+        /*
+         * The bootstrap account.
+         *
+         * A fresh deployment has a circular problem: verifying an address needs
+         * email, and configuring email needs somebody signed in to do it. This
+         * breaks the circle exactly once.
+         *
+         * Three conditions, all required. The operator has switched it on
+         * deliberately; nobody has verified yet, so there is no account to
+         * impersonate and no data to reach; and the person registering is
+         * therefore whoever just deployed this. The second condition makes it
+         * self-disabling — once this account exists, it can never fire again,
+         * whether or not the flag is left on.
+         */
+        if (config.BOOTSTRAP_FIRST_ACCOUNT && (await noOneHasVerifiedYet())) {
+          const [claimed] = await getDb()
+            .update(users)
+            .set({ emailVerifiedAt: new Date(), updatedAt: new Date() })
+            .where(eq(users.id, created.id))
+            .returning();
+
+          const session = await createSession(created.id, request.headers['user-agent']);
+          void reply.setCookie(
+            cookieName,
+            session.token,
+            sessionCookieOptions(config.SESSION_TTL_HOURS * 3600),
+          );
+
+          request.log.warn(
+            { email: created.email },
+            'BOOTSTRAP_FIRST_ACCOUNT: this deployment had no verified accounts, so this one was ' +
+              'verified without a code and signed in. No further account can use this path. ' +
+              'Remove BOOTSTRAP_FIRST_ACCOUNT and configure SMTP.',
+          );
+
+          await recordAudit({
+            actorId: created.id,
+            actorEmail: created.email,
+            entityType: 'user',
+            entityId: created.id,
+            action: 'bootstrap_first_account',
+            requestId: String(request.id),
+          });
+
+          void reply.status(201);
+          return {
+            status: 'signed_in',
+            bootstrapped: true,
+            message:
+              'This deployment had no verified accounts, so yours was created and signed in ' +
+              'directly. Nobody else can use that route — everyone from here on needs a code.',
+            user: publicUser(claimed ?? created),
+            emailDeliveryConfigured: config.realEmailEnabled,
+          };
+        }
+
+        const code = await issueCode(created.id, 'email_verification');
+        await sendVerificationCode(created.email, created.name, code);
       }
     } else if (existing.emailVerifiedAt === null) {
       // Unverified account: reissue rather than create a duplicate.
