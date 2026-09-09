@@ -72,11 +72,25 @@ afterAll(async () => {
   await closeDb();
 });
 
+/**
+ * Registration is rate limited per client address. Every request here comes
+ * from a distinct one, because otherwise the tests exhaust a shared budget and
+ * start measuring the rate limiter rather than the behaviour under test — which
+ * is precisely how the concurrency test below first failed, in 15ms, with every
+ * request rejected before it did any work.
+ */
+let nextClient = 0;
+function distinctClient(): string {
+  nextClient += 1;
+  return `10.${Math.floor(nextClient / 65_536) % 256}.${Math.floor(nextClient / 256) % 256}.${nextClient % 256}`;
+}
+
 async function register(app_: FastifyInstance) {
   const email = `bootstrap-${randomUUID()}@core.test`;
   const response = await app_.inject({
     method: 'POST',
     url: '/api/v1/auth/register',
+    remoteAddress: distinctClient(),
     payload: { name: 'Bootstrap Tester', email, password: 'a-long-enough-password' },
   });
   const row = (
@@ -150,6 +164,9 @@ describe('the race', () => {
         app.inject({
           method: 'POST',
           url: '/api/v1/auth/register',
+          // Six different clients arriving together, which is what a real race
+          // looks like and what the advisory lock has to survive.
+          remoteAddress: distinctClient(),
           payload: { name: 'Race Tester', email, password: 'a-long-enough-password' },
         }),
       ),
@@ -163,6 +180,12 @@ describe('the race', () => {
       if (row !== undefined) created.push(row.id);
     }
 
+    // Assert this first: a rate-limited or erroring request does no work, and
+    // "nobody was bootstrapped" would otherwise look like a lock failure.
+    for (const response of responses) {
+      expect([201, 202]).toContain(response.statusCode);
+    }
+
     const bootstrapped = responses.filter((r) => r.json().bootstrapped === true);
     expect(bootstrapped).toHaveLength(1);
 
@@ -172,11 +195,6 @@ describe('the race', () => {
       .from(users)
       .where(isNotNull(users.emailVerifiedAt));
     expect(verified).toHaveLength(1);
-
-    // Everyone who lost the race got an ordinary verification flow, not an error.
-    for (const response of responses) {
-      expect([201, 202]).toContain(response.statusCode);
-    }
   });
 });
 
