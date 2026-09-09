@@ -105,6 +105,26 @@ describe('health and readiness', () => {
     expect(response.json()).toMatchObject({ status: 'ok' });
   });
 
+  it('reports which optional integrations are configured, and no secrets', async () => {
+    // Exists so a configuration problem can be diagnosed from outside the box.
+    // Booleans only: nothing here may reveal a credential or say anything about
+    // who holds an account.
+    const response = await app.inject({ method: 'GET', url: '/readiness' });
+    const configured = response.json().configured;
+
+    expect(configured).toMatchObject({
+      email: expect.any(Boolean),
+      googleSignIn: expect.any(Boolean),
+      demoMode: expect.any(Boolean),
+      firstAccountBootstrap: expect.any(Boolean),
+    });
+
+    const body = response.body;
+    for (const secret of ['SMTP', 'password', 'secret', 'token', '@']) {
+      expect(body).not.toContain(secret);
+    }
+  });
+
   it('reports readiness including the database and migrations', async () => {
     const response = await app.inject({ method: 'GET', url: '/readiness' });
     expect(response.statusCode).toBe(200);
