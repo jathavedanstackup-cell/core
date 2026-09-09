@@ -127,6 +127,59 @@ describe('the bootstrap account', () => {
   });
 });
 
+describe('the race', () => {
+  /**
+   * The original implementation read "has anybody verified?" and then wrote,
+   * which is a time-of-check-to-time-of-use race. Concurrent registrations
+   * could each see an empty table and each be granted a verified account —
+   * defeating the single guarantee the feature makes.
+   *
+   * This fires several registrations at once and insists exactly one wins.
+   * It would pass by luck against the racy version often enough to be useless
+   * at n=2, so it uses more, and asserts on the database rather than only on
+   * the responses.
+   */
+  it('grants exactly one bootstrap when registrations arrive together', async () => {
+    const emails = Array.from(
+      { length: 6 },
+      () => `race-${randomUUID()}@core.test`,
+    );
+
+    const responses = await Promise.all(
+      emails.map((email) =>
+        app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/register',
+          payload: { name: 'Race Tester', email, password: 'a-long-enough-password' },
+        }),
+      ),
+    );
+
+    const db = getDb();
+    for (const email of emails) {
+      const row = (
+        await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1)
+      )[0];
+      if (row !== undefined) created.push(row.id);
+    }
+
+    const bootstrapped = responses.filter((r) => r.json().bootstrapped === true);
+    expect(bootstrapped).toHaveLength(1);
+
+    // And the database agrees: one verified account, not several.
+    const verified = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(isNotNull(users.emailVerifiedAt));
+    expect(verified).toHaveLength(1);
+
+    // Everyone who lost the race got an ordinary verification flow, not an error.
+    for (const response of responses) {
+      expect([201, 202]).toContain(response.statusCode);
+    }
+  });
+});
+
 describe('with the flag off', () => {
   let plainApp: FastifyInstance;
 

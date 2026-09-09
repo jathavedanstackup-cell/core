@@ -12,7 +12,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { eq, isNotNull } from 'drizzle-orm';
+import { eq, isNotNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { checkCode, issueCode } from '../auth/codes.js';
@@ -81,19 +81,51 @@ async function findByEmail(email: string): Promise<UserRow | undefined> {
 }
 
 /**
- * Whether anybody has ever finished signing up here.
+ * An arbitrary but fixed key identifying the bootstrap lock.
  *
- * Counts verified accounts, not rows: an abandoned half-finished signup — or a
- * stranger poking at the URL — must not lock the operator out of their own
- * fresh deployment. This is what makes the bootstrap below self-disabling.
+ * Advisory locks are namespaced only by this number, so it must not collide
+ * with any other advisory lock the application takes. It is currently the only
+ * one.
  */
-async function noOneHasVerifiedYet(): Promise<boolean> {
-  const rows = await getDb()
-    .select({ id: users.id })
-    .from(users)
-    .where(isNotNull(users.emailVerifiedAt))
-    .limit(1);
-  return rows.length === 0;
+const BOOTSTRAP_LOCK_KEY = 4_207_310_001;
+
+/**
+ * Claim the single bootstrap account, atomically.
+ *
+ * Returns the verified row if this caller won, or null if somebody had already
+ * verified — including a request that arrived microseconds earlier.
+ *
+ * The advisory lock is what makes this safe. Reading "has anybody verified?"
+ * and then writing would be a time-of-check-to-time-of-use race, and here the
+ * race matters: two concurrent registrations could each see an empty table and
+ * each be granted a verified account, which is exactly the one thing this
+ * feature promises cannot happen. The lock serialises the path across every
+ * connection and every instance, and Postgres releases it when the transaction
+ * ends, including on error.
+ *
+ * Counting *verified* accounts rather than rows is deliberate: an abandoned
+ * half-finished signup, or a stranger poking at the URL, must not lock the
+ * operator out of their own fresh deployment.
+ */
+async function claimBootstrapAccount(userId: string): Promise<UserRow | null> {
+  return getDb().transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${BOOTSTRAP_LOCK_KEY})`);
+
+    const alreadyVerified = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(isNotNull(users.emailVerifiedAt))
+      .limit(1);
+    if (alreadyVerified.length > 0) return null;
+
+    const [claimed] = await tx
+      .update(users)
+      .set({ emailVerifiedAt: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+
+    return claimed ?? null;
+  });
 }
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
@@ -148,14 +180,19 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
          * therefore whoever just deployed this. The second condition makes it
          * self-disabling — once this account exists, it can never fire again,
          * whether or not the flag is left on.
+         *
+         * "Check, then write" is a race here, and the race defeats the entire
+         * point: two registrations arriving together could both read an empty
+         * table and both be verified. So the read and the write happen inside
+         * one transaction holding an advisory lock, which serialises this path
+         * across every connection and every instance. The loser of the race
+         * sees the winner's row and falls through to an ordinary code.
          */
-        if (config.BOOTSTRAP_FIRST_ACCOUNT && (await noOneHasVerifiedYet())) {
-          const [claimed] = await getDb()
-            .update(users)
-            .set({ emailVerifiedAt: new Date(), updatedAt: new Date() })
-            .where(eq(users.id, created.id))
-            .returning();
+        const claimed = config.BOOTSTRAP_FIRST_ACCOUNT
+          ? await claimBootstrapAccount(created.id)
+          : null;
 
+        if (claimed !== null) {
           const session = await createSession(created.id, request.headers['user-agent']);
           void reply.setCookie(
             cookieName,
@@ -186,7 +223,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
             message:
               'This deployment had no verified accounts, so yours was created and signed in ' +
               'directly. Nobody else can use that route — everyone from here on needs a code.',
-            user: publicUser(claimed ?? created),
+            user: publicUser(claimed),
             emailDeliveryConfigured: config.realEmailEnabled,
           };
         }
