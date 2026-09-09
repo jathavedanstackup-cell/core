@@ -82,8 +82,12 @@ services:
       # Set to "true", register your account, then set it back to "false".
       # It stops working the moment any account is verified, so it cannot be
       # used twice even if you forget to turn it off.
+      # TEMPORARILY ON so the operator can claim the first account without a
+      # mail provider. Set back to "false" once that account exists. Leaving it
+      # on is not a hole — it stops working the moment any account is verified —
+      # but the default belongs at "false".
       - key: BOOTSTRAP_FIRST_ACCOUNT
-        value: "false"
+        value: "true"
 
       - key: DEMO_MODE_ENABLED
         value: "true"
