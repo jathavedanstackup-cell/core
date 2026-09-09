@@ -147,6 +147,24 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
     const existing = await findByEmail(input.email);
 
+    /*
+     * The account this registration is about, or undefined when there is
+     * nothing to do.
+     *
+     * A brand new address creates a row. An address that exists but was never
+     * verified is picked up rather than duplicated — somebody abandoning a
+     * signup and starting again is ordinary, not an error. An address that is
+     * already verified yields nothing: the response is identical either way, so
+     * this endpoint cannot be used to discover who has an account.
+     *
+     * Resolving the account before deciding what to do with it is deliberate.
+     * The first version only reached the bootstrap when it had just inserted a
+     * row, so the one person most likely to need it — the operator, who had
+     * already tried once and given up at the verification screen — could never
+     * get it.
+     */
+    let account: UserRow | undefined;
+
     if (existing === undefined) {
       const [created] = await getDb()
         .insert(users)
@@ -157,6 +175,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         })
         .returning();
 
+      account = created;
+
       if (created !== undefined) {
         await recordAudit({
           actorId: created.id,
@@ -166,76 +186,78 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
           action: 'register',
           requestId: String(request.id),
         });
-
-        /*
-         * The bootstrap account.
-         *
-         * A fresh deployment has a circular problem: verifying an address needs
-         * email, and configuring email needs somebody signed in to do it. This
-         * breaks the circle exactly once.
-         *
-         * Three conditions, all required. The operator has switched it on
-         * deliberately; nobody has verified yet, so there is no account to
-         * impersonate and no data to reach; and the person registering is
-         * therefore whoever just deployed this. The second condition makes it
-         * self-disabling — once this account exists, it can never fire again,
-         * whether or not the flag is left on.
-         *
-         * "Check, then write" is a race here, and the race defeats the entire
-         * point: two registrations arriving together could both read an empty
-         * table and both be verified. So the read and the write happen inside
-         * one transaction holding an advisory lock, which serialises this path
-         * across every connection and every instance. The loser of the race
-         * sees the winner's row and falls through to an ordinary code.
-         */
-        const claimed = config.BOOTSTRAP_FIRST_ACCOUNT
-          ? await claimBootstrapAccount(created.id)
-          : null;
-
-        if (claimed !== null) {
-          const session = await createSession(created.id, request.headers['user-agent']);
-          void reply.setCookie(
-            cookieName,
-            session.token,
-            sessionCookieOptions(config.SESSION_TTL_HOURS * 3600),
-          );
-
-          request.log.warn(
-            { email: created.email },
-            'BOOTSTRAP_FIRST_ACCOUNT: this deployment had no verified accounts, so this one was ' +
-              'verified without a code and signed in. No further account can use this path. ' +
-              'Remove BOOTSTRAP_FIRST_ACCOUNT and configure SMTP.',
-          );
-
-          await recordAudit({
-            actorId: created.id,
-            actorEmail: created.email,
-            entityType: 'user',
-            entityId: created.id,
-            action: 'bootstrap_first_account',
-            requestId: String(request.id),
-          });
-
-          void reply.status(201);
-          return {
-            status: 'signed_in',
-            bootstrapped: true,
-            message:
-              'This deployment had no verified accounts, so yours was created and signed in ' +
-              'directly. Nobody else can use that route — everyone from here on needs a code.',
-            user: publicUser(claimed),
-            emailDeliveryConfigured: config.realEmailEnabled,
-          };
-        }
-
-        const code = await issueCode(created.id, 'email_verification');
-        await sendVerificationCode(created.email, created.name, code);
       }
     } else if (existing.emailVerifiedAt === null) {
-      // Unverified account: reissue rather than create a duplicate.
-      const code = await issueCode(existing.id, 'email_verification');
-      await sendVerificationCode(existing.email, existing.name, code);
+      account = existing;
     }
+
+    if (account !== undefined) {
+      /*
+       * The bootstrap account.
+       *
+       * A fresh deployment has a circular problem: verifying an address needs
+       * email, and configuring email needs somebody signed in to do it. This
+       * breaks the circle exactly once.
+       *
+       * Three conditions, all required. The operator has switched it on
+       * deliberately; nobody has verified yet, so there is no account to
+       * impersonate and no data to reach; and the person registering is
+       * therefore whoever just deployed this. The second condition makes it
+       * self-disabling — once this account exists, it can never fire again,
+       * whether or not the flag is left on.
+       *
+       * "Check, then write" is a race here, and the race defeats the entire
+       * point: two registrations arriving together could both read an empty
+       * table and both be verified. So the read and the write happen inside
+       * one transaction holding an advisory lock, which serialises this path
+       * across every connection and every instance. The loser of the race
+       * sees the winner's row and falls through to an ordinary code.
+       */
+      const claimed = config.BOOTSTRAP_FIRST_ACCOUNT
+        ? await claimBootstrapAccount(account.id)
+        : null;
+
+      if (claimed !== null) {
+        const session = await createSession(account.id, request.headers['user-agent']);
+        void reply.setCookie(
+          cookieName,
+          session.token,
+          sessionCookieOptions(config.SESSION_TTL_HOURS * 3600),
+        );
+
+        request.log.warn(
+          { email: account.email },
+          'BOOTSTRAP_FIRST_ACCOUNT: this deployment had no verified accounts, so this one was ' +
+            'verified without a code and signed in. No further account can use this path. ' +
+            'Remove BOOTSTRAP_FIRST_ACCOUNT and configure SMTP.',
+        );
+
+        await recordAudit({
+          actorId: account.id,
+          actorEmail: account.email,
+          entityType: 'user',
+          entityId: account.id,
+          action: 'bootstrap_first_account',
+          requestId: String(request.id),
+        });
+
+        void reply.status(201);
+        return {
+          status: 'signed_in',
+          bootstrapped: true,
+          message:
+            'This deployment had no verified accounts, so yours was account and signed in ' +
+            'directly. Nobody else can use that route — everyone from here on needs a code.',
+          user: publicUser(claimed),
+          emailDeliveryConfigured: config.realEmailEnabled,
+        };
+      }
+
+    // Not bootstrapped: the ordinary path. Issuing a new code consumes any
+    // outstanding one, so a second attempt never leaves two codes live.
+    const code = await issueCode(account.id, 'email_verification');
+    await sendVerificationCode(account.email, account.name, code);
+  }
     // A verified account already exists: send nothing, say the same thing.
 
     void reply.status(202);

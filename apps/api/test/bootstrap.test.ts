@@ -141,6 +141,67 @@ describe('the bootstrap account', () => {
   });
 });
 
+describe('an address that was already tried once', () => {
+  /**
+   * This is how it failed in the real deployment. The operator had attempted to
+   * sign up before the bootstrap existed, given up at the verification screen,
+   * and come back. Their address therefore already had an unverified row, so
+   * registration took the "reissue a code" branch and never reached the
+   * bootstrap at all — leaving the one person it was built for unable to use it.
+   *
+   * A half-finished signup is completely ordinary. The bootstrap has to work
+   * for it.
+   */
+  it('bootstraps an existing unverified account rather than ignoring it', async () => {
+    // First attempt, with the feature off: an unverified row is left behind.
+    resetConfigForTests();
+    loadConfig({ ...BASE_ENV, BOOTSTRAP_FIRST_ACCOUNT: 'false' } as NodeJS.ProcessEnv);
+    const withoutBootstrap = await buildApp();
+    await withoutBootstrap.ready();
+
+    const email = `returning-${randomUUID()}@core.test`;
+    const payload = { name: 'Returning User', email, password: 'a-long-enough-password' };
+
+    const attempt = await withoutBootstrap.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      remoteAddress: distinctClient(),
+      payload,
+    });
+    expect(attempt.statusCode).toBe(202);
+    await withoutBootstrap.close();
+
+    const row = (
+      await getDb().select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1)
+    )[0];
+    expect(row).toBeDefined();
+    if (row !== undefined) created.push(row.id);
+
+    // They come back after the flag is switched on, using the same address.
+    resetConfigForTests();
+    loadConfig(BASE_ENV as NodeJS.ProcessEnv);
+    const withBootstrap = await buildApp();
+    await withBootstrap.ready();
+
+    const retry = await withBootstrap.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      remoteAddress: distinctClient(),
+      payload,
+    });
+    await withBootstrap.close();
+
+    expect(retry.statusCode).toBe(201);
+    expect(retry.json().bootstrapped).toBe(true);
+    expect(retry.json().user.email).toBe(email);
+    expect(String(retry.headers['set-cookie'])).toContain(loadConfig().SESSION_COOKIE_NAME);
+
+    // The same row was claimed; a duplicate account was not created.
+    const rows = await getDb().select({ id: users.id }).from(users).where(eq(users.email, email));
+    expect(rows).toHaveLength(1);
+  });
+});
+
 describe('the race', () => {
   /**
    * The original implementation read "has anybody verified?" and then wrote,
